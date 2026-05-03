@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: "Heebo", "Assistant", "Rubik", ui-sans-serif, system-ui;
+  background: radial-gradient(circle at top right, #ffffff 0%, #f8fafc 45%, #eef2f7 100%);
+  color: #0f172a;
+}
