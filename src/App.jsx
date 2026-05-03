@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, Loader2, Wallet } from "lucide-react";
+import { Archive, Loader2, ReceiptText, Wallet } from "lucide-react";
 import CategoryManager from "./components/CategoryManager";
 import Dashboard from "./components/Dashboard";
 import ExpenseForm from "./components/ExpenseForm";
@@ -282,7 +282,12 @@ export default function App() {
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Balance</h1>
+            <div className="inline-flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-slate-900 text-white">
+                <ReceiptText className="w-5 h-5" />
+              </span>
+              <h1 className="text-2xl font-semibold tracking-tight">Balance</h1>
+            </div>
             <p className="text-sm text-slate-500">ניהול הוצאות משפחתי</p>
           </div>
           <button onClick={closeMonth} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-3 text-sm">
