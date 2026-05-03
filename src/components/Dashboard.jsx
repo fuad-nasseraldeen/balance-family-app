@@ -38,6 +38,11 @@ export default function Dashboard({ categories, expenses }) {
     return { totalBudget, totalSpent, byCategory, byUser };
   }, [categories, expenses]);
 
+  const topCategoryRows = useMemo(
+    () => [...summary.byCategory].filter((x) => x.spent > 0).sort((a, b) => b.spent - a.spent).slice(0, 6),
+    [summary.byCategory]
+  );
+
   useLayoutEffect(() => {
     const root = createSafeRoot(gaugeRef.current);
     if (!root) return;
@@ -110,12 +115,8 @@ export default function Dashboard({ categories, expenses }) {
       })
     );
 
-    series.labels.template.setAll({
-      textType: "circular",
-      fontSize: 10,
-      maxWidth: 90,
-      oversizedBehavior: "truncate"
-    });
+    series.labels.template.setAll({ forceHidden: true });
+    series.ticks.template.setAll({ forceHidden: true });
     series.slices.template.setAll({
       tooltipText: "{category}: {value.formatNumber('#,###')} ₪"
     });
@@ -180,6 +181,15 @@ export default function Dashboard({ categories, expenses }) {
         </Card>
         <Card title="פילוח לפי קטגוריה">
           <div ref={pieRef} className="h-56 sm:h-64" />
+          <div className="mt-2 space-y-1.5">
+            {topCategoryRows.length === 0 && <p className="text-xs text-slate-500">אין נתונים להצגה.</p>}
+            {topCategoryRows.map((row) => (
+              <div key={row.category} className="flex items-center justify-between gap-3 text-xs">
+                <span className="truncate text-slate-600 max-w-[70%]">{row.category}</span>
+                <span className="font-medium text-slate-900">{formatCurrency(row.spent)}</span>
+              </div>
+            ))}
+          </div>
         </Card>
         <Card title="השוואה בין פואד לחיסן">
           <div ref={barRef} className="h-56 sm:h-64" />
