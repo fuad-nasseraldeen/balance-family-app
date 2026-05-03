@@ -306,10 +306,10 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6 pb-24">
         {activeView === "כללי" ? (
           <>
+            <ExpenseForm categories={categories} onAddExpense={handleAddExpense} />
             <Dashboard categories={categories} expenses={monthExpenses} />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <ExpenseForm categories={categories} onAddExpense={handleAddExpense} />
+            <div className="grid grid-cols-1 lg:grid-cols-1 gap-4">
               <CategoryManager
                 categories={categories}
                 onAddCategory={handleAddCategory}
@@ -330,8 +330,8 @@ export default function App() {
           </>
         ) : (
           <>
-            <Dashboard categories={activeOwner?.ownedCategories || []} expenses={activeOwner?.ownedExpenses || []} />
             <ExpenseForm categories={activeOwner?.ownedCategories || []} onAddExpense={handleAddExpense} />
+            <Dashboard categories={activeOwner?.ownedCategories || []} expenses={activeOwner?.ownedExpenses || []} />
             <RecurringAutoCard
               owner={activeOwner?.user || ""}
               autoExpenses={activeOwner?.ownedAutoExpenses || []}

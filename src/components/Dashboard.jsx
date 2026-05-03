@@ -82,8 +82,10 @@ export default function Dashboard({ categories, expenses }) {
         centerX: am5.percent(50),
         centerY: am5.percent(75),
         textAlign: "center",
-        fontSize: 14,
-        fontWeight: "500"
+        fontSize: 12,
+        fontWeight: "500",
+        maxWidth: am5.percent(80),
+        oversizedBehavior: "wrap"
       })
     );
 
@@ -108,7 +110,15 @@ export default function Dashboard({ categories, expenses }) {
       })
     );
 
-    series.labels.template.setAll({ textType: "circular", fontSize: 11 });
+    series.labels.template.setAll({
+      textType: "circular",
+      fontSize: 10,
+      maxWidth: 90,
+      oversizedBehavior: "truncate"
+    });
+    series.slices.template.setAll({
+      tooltipText: "{category}: {value.formatNumber('#,###')} ₪"
+    });
     series.data.setAll(summary.byCategory.filter((item) => item.spent > 0));
     series.appear(800, 100);
 
@@ -132,6 +142,8 @@ export default function Dashboard({ categories, expenses }) {
     );
 
     const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, { renderer: am5xy.AxisRendererY.new(root, {}) }));
+    xAxis.get("renderer").labels.template.setAll({ fontSize: 10 });
+    yAxis.get("renderer").labels.template.setAll({ fontSize: 10 });
 
     const series = chart.series.push(
       am5xy.ColumnSeries.new(root, {
@@ -139,7 +151,7 @@ export default function Dashboard({ categories, expenses }) {
         yAxis,
         valueYField: "spent",
         categoryXField: "user",
-        tooltip: am5.Tooltip.new(root, { labelText: "{valueY}" })
+        tooltip: am5.Tooltip.new(root, { labelText: "{valueY.formatNumber('#,###')} ₪" })
       })
     );
 
@@ -164,13 +176,13 @@ export default function Dashboard({ categories, expenses }) {
     <section className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card title="תקציב מול הוצאה">
-          <div ref={gaugeRef} className="h-64" />
+          <div ref={gaugeRef} className="h-56 sm:h-64" />
         </Card>
         <Card title="פילוח לפי קטגוריה">
-          <div ref={pieRef} className="h-64" />
+          <div ref={pieRef} className="h-56 sm:h-64" />
         </Card>
         <Card title="השוואה בין פואד לחיסן">
-          <div ref={barRef} className="h-64" />
+          <div ref={barRef} className="h-56 sm:h-64" />
         </Card>
       </div>
 
