@@ -4,6 +4,7 @@ import CategoryManager from "./components/CategoryManager";
 import Dashboard from "./components/Dashboard";
 import ExpenseForm from "./components/ExpenseForm";
 import ExpenseManager from "./components/ExpenseManager";
+import IncomeManager from "./components/IncomeManager";
 import RecurringAutoCard from "./components/RecurringAutoCard";
 import { USERS, formatCurrency, monthKey, monthLabel } from "./utils";
 import { useSupabaseRealtime } from "./hooks/useSupabaseRealtime";
@@ -17,6 +18,7 @@ import {
   getExpenses,
   updateExpense
 } from "./services/expensesService";
+import { createIncome, deleteIncome, getIncomes, updateIncome } from "./services/incomesService";
 import { getMonthlyHistory, saveMonthlySummary } from "./services/monthlyHistoryService";
 
 function mergeById(list, item) {
@@ -35,7 +37,9 @@ export default function App() {
   const [activeView, setActiveView] = useState("כללי");
   const [categories, setCategories] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [incomes, setIncomes] = useState([]);
   const [history, setHistory] = useState([]);
+  const [activeModule, setActiveModule] = useState("הוצאות");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
@@ -75,9 +79,10 @@ export default function App() {
     setError("");
     try {
       await migrateLocalStorageToSupabase();
-      const [cats, exps, hist] = await Promise.all([getCategories(), getExpenses(), getMonthlyHistory()]);
+      const [cats, exps, incs, hist] = await Promise.all([getCategories(), getExpenses(), getIncomes(), getMonthlyHistory()]);
       setCategories(cats);
       setExpenses(exps);
+      setIncomes(incs);
       setHistory(hist);
       await ensureAutomaticMonthlyExpenses(cats);
     } catch (e) {
@@ -112,6 +117,13 @@ export default function App() {
       setHistory((prev) => {
         if (eventType === "DELETE") return removeById(prev, old.id);
         return mergeById(prev, row).sort((a, b) => b.month.localeCompare(a.month));
+      });
+    }, []),
+    onIncomeEvent: useCallback(({ eventType, row, old }) => {
+      if (!row && !old) return;
+      setIncomes((prev) => {
+        if (eventType === "DELETE") return removeById(prev, old.id);
+        return mergeById(prev, row);
       });
     }, [])
   });
@@ -181,6 +193,37 @@ export default function App() {
     }
   }
 
+  async function handleAddIncome(payload) {
+    try {
+      await createIncome(payload);
+      notify("הכנסה נוספה");
+    } catch (e) {
+      console.error(e);
+      notify("שמירת הכנסה נכשלה");
+    }
+  }
+
+  async function handleUpdateIncome(id, patch) {
+    try {
+      await updateIncome(id, patch);
+      notify("הכנסה עודכנה");
+    } catch (e) {
+      console.error(e);
+      notify("עדכון הכנסה נכשל");
+    }
+  }
+
+  async function handleDeleteIncome(id) {
+    if (!window.confirm("למחוק את ההכנסה הזו?")) return;
+    try {
+      await deleteIncome(id);
+      notify("הכנסה נמחקה");
+    } catch (e) {
+      console.error(e);
+      notify("מחיקת הכנסה נכשלה");
+    }
+  }
+
   async function handleDeleteCategory(id) {
     if (!window.confirm("מחיקת קטגוריה תסיר גם הוצאות שקשורות אליה. להמשיך?")) return;
     try {
@@ -235,14 +278,27 @@ export default function App() {
     const ownedIds = new Set(ownedCategories.map((c) => c.id));
     const ownedExpenses = monthExpenses.filter((e) => ownedIds.has(e.categoryId));
     const ownedAutoExpenses = ownedExpenses.filter((e) => e.isAutomatic);
-    return { user, ownedCategories, ownedExpenses, ownedAutoExpenses };
+    const ownedIncomes = incomes.filter((income) => income.owner === user && monthKey(income.depositDate) === currentMonth);
+    return { user, ownedCategories, ownedExpenses, ownedAutoExpenses, ownedIncomes };
   });
 
   const activeOwner = ownerViews.find((x) => x.user === activeView);
   const scopeCategories = activeView === "כללי" ? categories : activeOwner?.ownedCategories || [];
   const scopeExpenses = activeView === "כללי" ? monthExpenses : activeOwner?.ownedExpenses || [];
+  const monthIncomes = useMemo(
+    () => incomes.filter((income) => monthKey(income.depositDate) === currentMonth),
+    [incomes, currentMonth]
+  );
+  const scopeIncomes = activeView === "כללי" ? monthIncomes : activeOwner?.ownedIncomes || [];
 
   const totalSpent = scopeExpenses.reduce((acc, e) => acc + e.amount, 0);
+  const totalIncome = scopeIncomes.reduce((acc, income) => acc + income.amount, 0);
+  const totalCashIncome = scopeIncomes
+    .filter((income) => income.paymentMethod === "מזומן")
+    .reduce((acc, income) => acc + income.amount, 0);
+  const totalTransferIncome = scopeIncomes
+    .filter((income) => income.paymentMethod === "העברה בנקאית")
+    .reduce((acc, income) => acc + income.amount, 0);
   const totalBudget = scopeCategories.reduce((acc, c) => acc + Number(c.target || 0), 0);
   const remaining = totalBudget - totalSpent;
 
@@ -290,21 +346,48 @@ export default function App() {
             </div>
             <p className="text-sm text-slate-500">ניהול הוצאות משפחתי</p>
           </div>
-          <button onClick={closeMonth} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-3 text-sm">
-            <Archive className="w-4 h-4" /> סיכום חודשי
-          </button>
+          {activeModule === "הוצאות" && (
+            <button onClick={closeMonth} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-3 text-sm">
+              <Archive className="w-4 h-4" /> סיכום חודשי
+            </button>
+          )}
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 pb-3 grid grid-cols-2 gap-2">
+          {["הוצאות", "הכנסות"].map((moduleName) => (
+            <button
+              key={moduleName}
+              onClick={() => setActiveModule(moduleName)}
+              className={`rounded-xl py-2.5 text-sm font-medium ${
+                activeModule === moduleName ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"
+              }`}
+            >
+              {moduleName}
+            </button>
+          ))}
         </div>
 
         <div className="max-w-7xl mx-auto px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Stat title="תקציב חודשי" value={formatCurrency(totalBudget)} />
-          <Stat title="הוצאה חודשית" value={formatCurrency(totalSpent)} />
-          <Stat title="נותר" value={formatCurrency(remaining)} color={remaining < 0 ? "text-rose-600" : "text-emerald-600"} />
-          <Stat title="סטטוס" value={householdStatus} />
+          {activeModule === "הוצאות" ? (
+            <>
+              <Stat title="תקציב חודשי" value={formatCurrency(totalBudget)} />
+              <Stat title="הוצאה חודשית" value={formatCurrency(totalSpent)} />
+              <Stat title="נותר" value={formatCurrency(remaining)} color={remaining < 0 ? "text-rose-600" : "text-emerald-600"} />
+              <Stat title="סטטוס" value={householdStatus} />
+            </>
+          ) : (
+            <>
+              <Stat title="הכנסה חודשית" value={formatCurrency(totalIncome)} />
+              <Stat title="מזומן" value={formatCurrency(totalCashIncome)} />
+              <Stat title="העברה בנקאית" value={formatCurrency(totalTransferIncome)} />
+              <Stat title="סה״כ פעולות" value={scopeIncomes.length} />
+            </>
+          )}
         </div>
       </header>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6 pb-24">
-        {activeView === "כללי" ? (
+        {activeModule === "הוצאות" ? activeView === "כללי" ? (
           <>
             <ExpenseForm categories={categories} onAddExpense={handleAddExpense} />
             <Dashboard categories={categories} expenses={monthExpenses} />
@@ -345,9 +428,19 @@ export default function App() {
               onDeleteExpense={handleDeleteExpense}
             />
           </>
+        ) : (
+          <IncomeManager
+            incomes={[...scopeIncomes].sort((a, b) => new Date(b.depositDate) - new Date(a.depositDate))}
+            onAddIncome={handleAddIncome}
+            onUpdateIncome={handleUpdateIncome}
+            onDeleteIncome={handleDeleteIncome}
+            owner={activeOwner?.user || ""}
+            isGeneralView={activeView === "כללי"}
+          />
         )}
 
-        <section className="bg-white rounded-2xl shadow-soft border border-slate-100 p-5">
+        {activeModule === "הוצאות" && (
+          <section className="bg-white rounded-2xl shadow-soft border border-slate-100 p-5">
           <h2 className="font-semibold mb-3">היסטוריה חודשית</h2>
           <div className="space-y-2 max-h-56 overflow-auto">
             {history.length === 0 && <p className="text-sm text-slate-500">אין היסטוריה עדיין.</p>}
@@ -358,7 +451,8 @@ export default function App() {
               </div>
             ))}
           </div>
-        </section>
+          </section>
+        )}
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200">
@@ -377,8 +471,12 @@ export default function App() {
 
       <footer className="border-t border-slate-200 bg-white mt-auto hidden md:block">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="inline-flex items-center gap-2 text-slate-500 text-sm"><Wallet className="w-4 h-4" /> יתרה לחודש {monthLabel(currentMonth)}</div>
-          <p className={`text-lg font-semibold ${remaining < 0 ? "text-rose-600" : "text-slate-900"}`}>{formatCurrency(remaining)}</p>
+          <div className="inline-flex items-center gap-2 text-slate-500 text-sm">
+            <Wallet className="w-4 h-4" /> {activeModule === "הוצאות" ? "יתרה לחודש" : "הכנסה לחודש"} {monthLabel(currentMonth)}
+          </div>
+          <p className={`text-lg font-semibold ${activeModule === "הוצאות" && remaining < 0 ? "text-rose-600" : "text-slate-900"}`}>
+            {activeModule === "הוצאות" ? formatCurrency(remaining) : formatCurrency(totalIncome)}
+          </p>
         </div>
       </footer>
     </div>

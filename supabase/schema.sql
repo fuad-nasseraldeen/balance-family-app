@@ -43,6 +43,17 @@ create table if not exists monthly_history (
   created_at timestamptz default now()
 );
 
+create table if not exists incomes (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  owner text not null check (owner in ('fuad', 'hisan')),
+  amount numeric not null check (amount >= 0),
+  deposit_date date not null,
+  payment_method text not null check (payment_method in ('cash', 'bank_transfer')),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 create unique index if not exists expenses_auto_unique_idx
   on expenses(household_id, category_id, automatic_month, is_automatic);
 
@@ -50,6 +61,7 @@ alter table households disable row level security;
 alter table categories disable row level security;
 alter table expenses disable row level security;
 alter table monthly_history disable row level security;
+alter table incomes disable row level security;
 
 create or replace function set_updated_at()
 returns trigger as $$
@@ -67,4 +79,9 @@ for each row execute procedure set_updated_at();
 drop trigger if exists trg_expenses_updated_at on expenses;
 create trigger trg_expenses_updated_at
 before update on expenses
+for each row execute procedure set_updated_at();
+
+drop trigger if exists trg_incomes_updated_at on incomes;
+create trigger trg_incomes_updated_at
+before update on incomes
 for each row execute procedure set_updated_at();

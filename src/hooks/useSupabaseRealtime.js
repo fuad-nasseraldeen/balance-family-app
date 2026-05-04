@@ -3,9 +3,10 @@ import { HOUSEHOLD_ID } from "../constants/household";
 import { supabase } from "../lib/supabaseClient";
 import { mapCategoryRealtime } from "../services/categoriesService";
 import { mapExpenseRealtime } from "../services/expensesService";
+import { mapIncomeRealtime } from "../services/incomesService";
 import { mapMonthlyHistoryRealtime } from "../services/monthlyHistoryService";
 
-export function useSupabaseRealtime({ onCategoryEvent, onExpenseEvent, onHistoryEvent }) {
+export function useSupabaseRealtime({ onCategoryEvent, onExpenseEvent, onIncomeEvent, onHistoryEvent }) {
   useEffect(() => {
     const channel = supabase.channel(`balance-household-${HOUSEHOLD_ID}`);
 
@@ -36,10 +37,19 @@ export function useSupabaseRealtime({ onCategoryEvent, onExpenseEvent, onHistory
       }
     );
 
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "incomes", filter: `household_id=eq.${HOUSEHOLD_ID}` },
+      (payload) => {
+        const mapped = payload.new ? mapIncomeRealtime(payload.new) : payload.old ? mapIncomeRealtime(payload.old) : null;
+        onIncomeEvent?.({ eventType: payload.eventType, row: mapped, old: payload.old || null });
+      }
+    );
+
     channel.subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [onCategoryEvent, onExpenseEvent, onHistoryEvent]);
+  }, [onCategoryEvent, onExpenseEvent, onIncomeEvent, onHistoryEvent]);
 }
