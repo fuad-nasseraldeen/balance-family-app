@@ -7,6 +7,7 @@ function mapCategoryRow(row) {
     id: row.id,
     householdId: row.household_id,
     name: row.name,
+    parentName: row.parent_name || null,
     owner: ownerDbToUi(row.owner),
     target: Number(row.monthly_target || 0),
     isAuto: !!row.is_automatic,
@@ -19,6 +20,7 @@ function toCategoryInsert(data) {
   return {
     household_id: HOUSEHOLD_ID,
     name: data.name,
+    parent_name: data.parentName || data.name,
     owner: ownerUiToDb(data.owner),
     monthly_target: Number(data.target || 0),
     is_automatic: !!data.isAuto
@@ -28,6 +30,7 @@ function toCategoryInsert(data) {
 function toCategoryUpdate(data) {
   const out = {};
   if (data.name !== undefined) out.name = data.name;
+  if (data.parentName !== undefined) out.parent_name = data.parentName;
   if (data.owner !== undefined) out.owner = ownerUiToDb(data.owner);
   if (data.target !== undefined) out.monthly_target = Number(data.target || 0);
   if (data.isAuto !== undefined) out.is_automatic = !!data.isAuto;

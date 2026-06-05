@@ -19,7 +19,9 @@ function mapIncomeRow(row) {
     householdId: row.household_id,
     owner: ownerDbToUi(row.owner),
     amount: Number(row.amount || 0),
-    depositDate: row.deposit_date,
+    source: row.source || "משכורת",
+    note: row.note || "",
+    depositDate: row.income_date || row.deposit_date,
     paymentMethod: paymentDbToUi(row.payment_method),
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -31,8 +33,11 @@ function toInsert(data) {
     household_id: HOUSEHOLD_ID,
     owner: ownerUiToDb(data.owner),
     amount: Number(data.amount || 0),
-    deposit_date: data.depositDate,
-    payment_method: paymentUiToDb(data.paymentMethod)
+    source: data.source || "משכורת",
+    note: data.note || null,
+    income_date: data.incomeDate || data.depositDate || new Date().toISOString().slice(0, 10),
+    deposit_date: data.incomeDate || data.depositDate || new Date().toISOString().slice(0, 10),
+    payment_method: paymentUiToDb(data.paymentMethod || "מזומן")
   };
 }
 
@@ -40,7 +45,13 @@ function toUpdate(data) {
   const out = {};
   if (data.owner !== undefined) out.owner = ownerUiToDb(data.owner);
   if (data.amount !== undefined) out.amount = Number(data.amount || 0);
-  if (data.depositDate !== undefined) out.deposit_date = data.depositDate;
+  if (data.source !== undefined) out.source = data.source;
+  if (data.note !== undefined) out.note = data.note || null;
+  if (data.incomeDate !== undefined || data.depositDate !== undefined) {
+    const incomeDate = data.incomeDate || data.depositDate;
+    out.income_date = incomeDate;
+    out.deposit_date = incomeDate;
+  }
   if (data.paymentMethod !== undefined) out.payment_method = paymentUiToDb(data.paymentMethod);
   return out;
 }

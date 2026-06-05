@@ -1,14 +1,55 @@
+@import url("https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  --primary: 222 47% 16%;
+  --teal: 174 60% 41%;
+  --red: 0 72% 51%;
+  --background: 220 20% 97%;
+  --card: 0 0% 100%;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: "Heebo", "Assistant", "Rubik", ui-sans-serif, system-ui;
-  background: radial-gradient(circle at top right, #ffffff 0%, #f8fafc 45%, #eef2f7 100%);
-  color: #0f172a;
+  direction: rtl;
+  font-family: "Rubik", sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--primary));
 }
+
+.card {
+  background: hsl(var(--card));
+  border-radius: 1rem;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.field {
+  min-height: 44px;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  background: #fff;
+}
+
+.field:focus {
+  outline: 2px solid hsla(222, 47%, 16%, 0.2);
+  border-color: hsl(var(--primary));
+}
+
+.bg-primary { background-color: hsl(var(--primary)); }
+.text-primary { color: hsl(var(--primary)); }
+.bg-teal { background-color: hsl(var(--teal)); }
+.text-teal { color: hsl(var(--teal)); }
+.bg-red { background-color: hsl(var(--red)); }
+.text-red { color: hsl(var(--red)); }
+.bg-background { background-color: hsl(var(--background)); }

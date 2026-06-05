@@ -10,7 +10,8 @@ create table if not exists categories (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households(id) on delete cascade,
   name text not null,
-  owner text not null check (owner in ('fuad', 'hisan')),
+  parent_name text,
+  owner text not null check (owner in ('fuad', 'hesen')),
   monthly_target numeric not null default 0,
   is_automatic boolean not null default false,
   created_at timestamptz default now(),
@@ -21,8 +22,8 @@ create table if not exists expenses (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households(id) on delete cascade,
   category_id uuid references categories(id) on delete set null,
-  owner text not null check (owner in ('fuad', 'hisan')),
-  paid_by text not null check (paid_by in ('fuad', 'hisan')),
+  owner text not null check (owner in ('fuad', 'hesen')),
+  paid_by text not null check (paid_by in ('fuad', 'hesen')),
   amount numeric not null check (amount >= 0),
   note text,
   expense_date date not null,
@@ -46,10 +47,22 @@ create table if not exists monthly_history (
 create table if not exists incomes (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households(id) on delete cascade,
-  owner text not null check (owner in ('fuad', 'hisan')),
+  owner text not null check (owner in ('fuad', 'hesen')),
   amount numeric not null check (amount >= 0),
   deposit_date date not null,
   payment_method text not null check (payment_method in ('cash', 'bank_transfer')),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists cancellations (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  owner text not null check (owner in ('fuad', 'hesen')),
+  amount numeric not null check (amount >= 0),
+  client_name text,
+  note text,
+  cancellation_date date not null,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -62,6 +75,7 @@ alter table categories disable row level security;
 alter table expenses disable row level security;
 alter table monthly_history disable row level security;
 alter table incomes disable row level security;
+alter table cancellations disable row level security;
 
 create or replace function set_updated_at()
 returns trigger as $$
@@ -84,4 +98,9 @@ for each row execute procedure set_updated_at();
 drop trigger if exists trg_incomes_updated_at on incomes;
 create trigger trg_incomes_updated_at
 before update on incomes
+for each row execute procedure set_updated_at();
+
+drop trigger if exists trg_cancellations_updated_at on cancellations;
+create trigger trg_cancellations_updated_at
+before update on cancellations
 for each row execute procedure set_updated_at();
