@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
   BarChart3,
   ChevronLeft,
   ChevronRight,
   Home,
   Settings,
-  Sparkles,
   Target,
   Trash2,
   TrendingDown,
@@ -90,6 +88,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [selectedYear, setSelectedYear] = useState(currentYear());
+  const [showMonthDetails, setShowMonthDetails] = useState(false);
   const [expenseForm, setExpenseForm] = useState({ amount: "", categoryGroup: "", categoryId: "", description: "", owner: "פואד", expenseDate: currentMonthKey() + "-01" });
   const [incomeForm, setIncomeForm] = useState({ amount: "", source: "", owner: "פואד", description: "", incomeDate: currentMonthKey() + "-01" });
   const [cancellationForm, setCancellationForm] = useState({ amount: "", clientName: "", note: "", cancellationDate: currentMonthKey() + "-01" });
@@ -488,28 +487,37 @@ export default function App() {
           />
         ) : (
           <>
-        <section className="card p-4 space-y-3">
+        <section className="card p-3 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">חודש נבחר</p>
-              <h2 className="text-xl font-bold text-primary">{monthLabel(selectedMonth)}</h2>
+              <p className="text-xs text-slate-500">חודש</p>
+              <h2 className="text-lg font-bold text-primary">{monthLabel(selectedMonth)}</h2>
             </div>
             <div className="flex items-center gap-2">
               <button className="rounded-xl border border-slate-200 bg-white p-2" onClick={() => setSelectedMonth(monthOptions[Math.max(0, monthOptions.findIndex((item) => item.value === selectedMonth) - 1)]?.value || selectedMonth)}><ChevronRight className="h-4 w-4" /></button>
               <button className="rounded-xl border border-slate-200 bg-white p-2" onClick={() => setSelectedMonth(monthOptions[Math.min(monthOptions.length - 1, monthOptions.findIndex((item) => item.value === selectedMonth) + 1)]?.value || selectedMonth)}><ChevronLeft className="h-4 w-4" /></button>
             </div>
           </div>
-          <div className="grid gap-2 md:grid-cols-3">
-            <label className="text-sm text-slate-600">חודש
-              <select className="field mt-1" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>{monthOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
-            </label>
-            <label className="text-sm text-slate-600">שנה
-              <select className="field mt-1" value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>{Array.from({ length: 5 }, (_, i) => currentYear() - i).map((year) => <option key={year} value={year}>{year}</option>)}</select>
-            </label>
-            <div className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">הכנסות: {money(totalBudget)} • הוצאות: {money(totalSpent)} • ביטולים: {money(totalCancelled)} • נשאר: {money(balance)}</div>
-          </div>
+          <button
+            type="button"
+            className="w-full rounded-xl bg-slate-50 p-3 text-sm font-semibold text-primary"
+            onClick={() => setShowMonthDetails((value) => !value)}
+          >
+            נשאר: <span dir="ltr">{money(balance)}</span> · פירוט
+          </button>
+          {showMonthDetails && (
+            <div className="grid gap-2 md:grid-cols-3">
+              <label className="text-sm text-slate-600">חודש
+                <select className="field mt-1" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>{monthOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select>
+              </label>
+              <label className="text-sm text-slate-600">שנה
+                <select className="field mt-1" value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>{Array.from({ length: 5 }, (_, i) => currentYear() - i).map((year) => <option key={year} value={year}>{year}</option>)}</select>
+              </label>
+              <div className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-600">הכנסות: {money(totalBudget)} · הוצאות: {money(totalSpent)} · ביטולים: {money(totalCancelled)}</div>
+            </div>
+          )}
         </section>
-        <SummaryCards totalBudget={totalBudget} totalSpent={totalSpent} totalCancelled={totalCancelled} balance={balance} topCategory={topCategory} />
+        <SummaryCards totalBudget={totalBudget} totalSpent={totalSpent} totalCancelled={totalCancelled} balance={balance} />
 
         <Card title="+ הוספת הוצאה">
           <form onSubmit={handleAddExpense} className="grid gap-2 md:grid-cols-5">
@@ -566,36 +574,42 @@ export default function App() {
 
         <div className="grid gap-4 md:grid-cols-3">
           <Card title="תקציב מול הוצאה">
-            <div className="h-56">
-              <ResponsiveContainer>
+            <div className="space-y-2">
+              <div className="h-40">
+                <ResponsiveContainer>
                 <PieChart>
                   <Pie data={[{ name: "הוצאה", value: totalSpent }, { name: "נותר", value: Math.max(balance, 0) }]} dataKey="value" innerRadius={55} outerRadius={80}>
                     <Cell fill="#16213B" />
                     <Cell fill="#E5E7EB" />
                   </Pie>
                 </PieChart>
-              </ResponsiveContainer>
-              <p className="text-center font-semibold" dir="ltr">{money(totalSpent)}</p>
-              <p className="text-center text-sm text-slate-500" dir="ltr">מתוך {money(totalBudget)}</p>
+                </ResponsiveContainer>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-2 text-center">
+                <p className="font-semibold leading-tight" dir="ltr">{money(totalSpent)}</p>
+                <p className="text-xs text-slate-500" dir="ltr">מתוך {money(totalBudget)}</p>
+              </div>
             </div>
           </Card>
 
           <Card title="פילוח לפי קטגוריה">
-            <div className="h-56">
-              <ResponsiveContainer>
+            <div className="space-y-2">
+              <div className="h-40">
+                <ResponsiveContainer>
                 <PieChart>
                   <Pie data={expensesByCategory} dataKey="value" innerRadius={45} outerRadius={75}>
                     {expensesByCategory.map((entry, idx) => <Cell key={entry.name} fill={CHART_COLORS[idx % CHART_COLORS.length]} />)}
                   </Pie>
                   <Tooltip formatter={(value) => money(value)} />
                 </PieChart>
-              </ResponsiveContainer>
-              <div className="grid grid-cols-2 gap-1 text-xs">
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-2 gap-1 text-[11px] leading-tight">
                 {expensesByCategory.slice(0, 6).map((item, idx) => (
-                  <div key={item.name} className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART_COLORS[idx % CHART_COLORS.length] }} />
-                    <span>{item.name}</span>
-                    <span className="text-slate-500" dir="ltr">{money(item.value)}</span>
+                  <div key={item.name} className="flex min-w-0 items-center gap-1">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: CHART_COLORS[idx % CHART_COLORS.length] }} />
+                    <span className="truncate">{item.name}</span>
+                    <span className="shrink-0 text-slate-500" dir="ltr">{money(item.value)}</span>
                   </div>
                 ))}
               </div>
@@ -932,26 +946,32 @@ function CategorySettingsPage({
   );
 }
 
-function SummaryCards({ totalBudget, totalSpent, totalCancelled, balance, topCategory }) {
+function SummaryCards({ totalBudget, totalSpent, totalCancelled, balance }) {
   const over = balance < 0;
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <StatCard label="תקציב חודשי" value={money(totalBudget)} icon={<Wallet className="h-5 w-5" />} />
-      <StatCard label="הוצאה חודשית" value={money(totalSpent)} color="text-red" icon={<TrendingDown className="h-5 w-5" />} />
-      <StatCard label="ביטולים" value={money(totalCancelled)} color="text-red" icon={<XCircle className="h-5 w-5" />} />
-      <StatCard label="יתרה" value={money(balance)} color={over ? "text-red" : "text-teal"} icon={<TrendingUp className="h-5 w-5" />} />
-      <StatCard label="הקטגוריה הבולטת" value={topCategory[0]} color="text-primary" icon={<Sparkles className="h-5 w-5" />} />
-      <StatCard label="סטטוס" value={over ? "חריגה" : "תקין"} color={over ? "text-red" : "text-teal"} icon={<AlertTriangle className="h-5 w-5" />} />
+    <div className="grid grid-cols-4 gap-1.5 md:gap-2">
+      <StatCard label="תקציב" value={money(totalBudget)} tone="primary" icon={<Wallet className="h-3.5 w-3.5" />} />
+      <StatCard label="הוצאה" value={money(totalSpent)} tone="red" icon={<TrendingDown className="h-3.5 w-3.5" />} />
+      <StatCard label="יתרה" value={money(balance)} tone={over ? "red" : "teal"} icon={<TrendingUp className="h-3.5 w-3.5" />} />
+      <StatCard label="ביטולים" value={money(totalCancelled)} tone="red" icon={<XCircle className="h-3.5 w-3.5" />} />
     </div>
   );
 }
 
-function StatCard({ label, value, icon, color = "text-primary" }) {
+function StatCard({ label, value, icon, tone = "primary" }) {
+  const styles = {
+    primary: "border-slate-100 bg-white text-primary",
+    teal: "border-teal/20 bg-teal/10 text-teal",
+    red: "border-red/20 bg-red/10 text-red"
+  };
+
   return (
-    <div className="card p-4">
-      <div className="flex justify-end text-slate-500">{icon}</div>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`text-lg font-bold ${color}`} dir="ltr">{value}</p>
+    <div className={`rounded-xl border p-2 shadow-sm ${styles[tone]}`}>
+      <div className="mb-1 flex items-center justify-between gap-1">
+        <span className="text-[10px] font-medium text-slate-500">{label}</span>
+        <span className="text-slate-500">{icon}</span>
+      </div>
+      <p className="truncate text-[13px] font-extrabold leading-tight sm:text-base" dir="ltr" title={String(value)}>{value}</p>
     </div>
   );
 }
