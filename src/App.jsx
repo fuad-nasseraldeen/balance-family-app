@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Home,
@@ -26,7 +27,7 @@ import {
 } from "recharts";
 import { createCategory, deleteCategory, getCategories, updateCategory } from "./services/categoriesService";
 import { createCancellation, deleteCancellation, getCancellations } from "./services/cancellationsService";
-import { createExpense, deleteExpense, getExpenses } from "./services/expensesService";
+import { createAutomaticExpenseIfMissing, createExpense, deleteExpense, getExpenses } from "./services/expensesService";
 import { createIncome, getIncomes } from "./services/incomesService";
 import { useSupabaseRealtime } from "./hooks/useSupabaseRealtime";
 
@@ -93,6 +94,7 @@ export default function App() {
   const [incomeForm, setIncomeForm] = useState({ amount: "", source: "", owner: "פואד", description: "", incomeDate: currentMonthKey() + "-01" });
   const [cancellationForm, setCancellationForm] = useState({ amount: "", clientName: "", note: "", cancellationDate: currentMonthKey() + "-01" });
   const [categoryForm, setCategoryForm] = useState({ parentName: "", name: "", target: "" });
+  const [mainCategoryForm, setMainCategoryForm] = useState({ name: "", target: "", owner: "פואד" });
   const [childActivityForm, setChildActivityForm] = useState({ name: "", child: CHILDREN[0], target: "" });
 
   useEffect(() => {
@@ -178,6 +180,50 @@ export default function App() {
     onIncomeEvent: handleIncomeEvent,
     onCancellationEvent: handleCancellationEvent
   });
+
+  useEffect(() => {
+    if (!categories.length || loading) return;
+
+    let cancelled = false;
+
+    const generateAutomaticExpenses = async () => {
+      const autoCategories = categories.filter((category) => category.isAuto);
+      if (!autoCategories.length) return;
+
+      const created = await Promise.all(
+        autoCategories.map((category) =>
+          createAutomaticExpenseIfMissing({
+            categoryId: category.id,
+            owner: category.owner || "פואד",
+            paidBy: category.owner || "פואד",
+            amount: Number(category.target || 0),
+            note: "הוצאה אוטומטית חודשית",
+            expenseDate: `${selectedMonth}-01`,
+            isAutomatic: true,
+            automaticMonth: selectedMonth
+          })
+        )
+      );
+
+      if (cancelled) return;
+
+      const flat = created.flat();
+      setExpenses((prev) => {
+        const map = new Map(prev.map((item) => [item.id, item]));
+        flat.forEach((item) => map.set(item.id, item));
+        return [...map.values()].sort((a, b) => new Date(b.expenseDate) - new Date(a.expenseDate));
+      });
+    };
+
+    generateAutomaticExpenses().catch((err) => {
+      console.error(err);
+      setError("יצירת הוצאות אוטומטיות נכשלה");
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [categories, loading, selectedMonth]);
 
   const categoryGroups = useMemo(() => {
     const groups = new Set();
@@ -353,6 +399,27 @@ export default function App() {
     }
   };
 
+  const handleAddMainCategory = async (event) => {
+    event.preventDefault();
+    const name = mainCategoryForm.name.trim();
+    if (!name) return;
+
+    try {
+      const saved = await createCategory({
+        parentName: name,
+        name,
+        owner: mainCategoryForm.owner || "פואד",
+        target: Number(mainCategoryForm.target || 0),
+        isAuto: false
+      });
+      setCategories((prev) => [...prev, saved]);
+      setMainCategoryForm({ name: "", target: "", owner: "פואד" });
+    } catch (err) {
+      console.error(err);
+      setError("שמירת קטגוריה ראשית נכשלה");
+    }
+  };
+
   const handleAddCategory = async (event) => {
     event.preventDefault();
     const parentName = categoryForm.parentName.trim();
@@ -371,7 +438,7 @@ export default function App() {
       setCategoryForm({ parentName: "", name: "", target: "" });
     } catch (err) {
       console.error(err);
-      setError("שמירת קטגוריה נכשלה");
+      setError("שמירת תת קטגוריה נכשלה");
     }
   };
 
@@ -476,10 +543,13 @@ export default function App() {
           <CategorySettingsPage
             categories={categories}
             categoryGroups={categoryGroups}
+            mainCategoryForm={mainCategoryForm}
+            setMainCategoryForm={setMainCategoryForm}
             categoryForm={categoryForm}
             setCategoryForm={setCategoryForm}
             childActivityForm={childActivityForm}
             setChildActivityForm={setChildActivityForm}
+            onAddMainCategory={handleAddMainCategory}
             onAddCategory={handleAddCategory}
             onAddChildActivity={handleAddChildActivity}
             onUpdateCategory={handleUpdateCategory}
@@ -812,20 +882,47 @@ function GoalsPage({ categories, expenses, onUpdateCategory }) {
 function CategorySettingsPage({
   categories,
   categoryGroups,
+  mainCategoryForm,
+  setMainCategoryForm,
   categoryForm,
   setCategoryForm,
   childActivityForm,
   setChildActivityForm,
+  onAddMainCategory,
   onAddCategory,
   onAddChildActivity,
   onUpdateCategory,
   onDeleteCategory
 }) {
+  const [openGroups, setOpenGroups] = useState({});
+  const [searchTerm, setSearchTerm] = useState("");
+
   const sortedCategories = [...categories].sort((a, b) => {
     const parentCompare = categoryParent(a).localeCompare(categoryParent(b), "he");
     if (parentCompare !== 0) return parentCompare;
     return categoryChildLabel(a).localeCompare(categoryChildLabel(b), "he");
   });
+
+  const filteredCategories = useMemo(() => {
+    const normalized = searchTerm.trim().toLowerCase();
+    if (!normalized) return sortedCategories;
+
+    return sortedCategories.filter((category) => {
+      const haystack = `${categoryParent(category)} ${categoryChildLabel(category)} ${category.name}`.toLowerCase();
+      return haystack.includes(normalized);
+    });
+  }, [searchTerm, sortedCategories]);
+
+  const groupedCategories = useMemo(() => {
+    const map = new Map();
+    filteredCategories.forEach((category) => {
+      const group = categoryParent(category);
+      if (!map.has(group)) map.set(group, []);
+      map.get(group).push(category);
+    });
+
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b, "he"));
+  }, [filteredCategories]);
 
   return (
     <div className="space-y-4">
@@ -869,77 +966,144 @@ function CategorySettingsPage({
         </div>
       </Card>
 
-      <Card title="הוספת תת קטגוריה">
-        <form onSubmit={onAddCategory} className="grid gap-2 md:grid-cols-4">
-          <input
-            className="field"
-            list="category-groups"
-            placeholder="קטגוריה ראשית"
-            value={categoryForm.parentName}
-            onChange={(event) => setCategoryForm((prev) => ({ ...prev, parentName: event.target.value }))}
-          />
-          <input
-            className="field"
-            placeholder="תת קטגוריה"
-            value={categoryForm.name}
-            onChange={(event) => setCategoryForm((prev) => ({ ...prev, name: event.target.value }))}
-          />
-          <input
-            className="field"
-            type="number"
-            min="0"
-            dir="ltr"
-            placeholder="יעד חודשי"
-            value={categoryForm.target}
-            onChange={(event) => setCategoryForm((prev) => ({ ...prev, target: event.target.value }))}
-          />
-          <button className="min-h-11 rounded-xl bg-primary text-white font-medium" type="submit">הוספה</button>
-          <datalist id="category-groups">
-            {categoryGroups.map((groupName) => <option key={groupName} value={groupName} />)}
-          </datalist>
-        </form>
-      </Card>
-
       <Card title="ניהול קטגוריות ותתי קטגוריות">
-        <div className="max-h-[620px] space-y-3 overflow-auto pr-1">
-          {sortedCategories.length === 0 && <p className="py-10 text-center text-slate-500">אין קטגוריות להצגה</p>}
-          {sortedCategories.map((category) => (
-            <div key={category.id} className="grid gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 md:grid-cols-12">
-              <input
-                className="field md:col-span-4"
-                list="category-groups"
-                defaultValue={categoryParent(category)}
-                onBlur={(event) => {
-                  const value = event.target.value.trim();
-                  if (value && value !== categoryParent(category)) onUpdateCategory(category.id, { parentName: value });
-                }}
-              />
-              <input
-                className="field md:col-span-4"
-                defaultValue={categoryChildLabel(category)}
-                onBlur={(event) => {
-                  const value = event.target.value.trim();
-                  if (value && value !== category.name) onUpdateCategory(category.id, { name: value });
-                }}
-              />
-              <input
-                className="field md:col-span-2"
-                type="number"
-                min="0"
-                dir="ltr"
-                defaultValue={category.target}
-                onBlur={(event) => onUpdateCategory(category.id, { target: Number(event.target.value || 0) })}
-              />
-              <button
-                type="button"
-                className="min-h-11 rounded-xl border border-slate-200 bg-white text-red hover:bg-red/10 md:col-span-2"
-                onClick={() => onDeleteCategory(category.id)}
-              >
-                <Trash2 className="mx-auto h-4 w-4" />
-              </button>
-              <p className="text-xs text-slate-400 md:col-span-12">עודכן: {timeText(category.updatedAt || category.createdAt)}</p>
-            </div>
-          ))}
+        <div className="mb-3 rounded-2xl border border-slate-100 bg-white p-3 space-y-3">
+          <p className="text-xs text-slate-500">הוספה מהירה בתוך האקורדיון</p>
+          <form onSubmit={onAddMainCategory} className="grid gap-2 md:grid-cols-4">
+            <input
+              className="field"
+              placeholder="שם קטגוריה ראשית"
+              value={mainCategoryForm.name}
+              onChange={(event) => setMainCategoryForm((prev) => ({ ...prev, name: event.target.value }))}
+            />
+            <input
+              className="field"
+              type="number"
+              min="0"
+              dir="ltr"
+              placeholder="יעד חודשי"
+              value={mainCategoryForm.target}
+              onChange={(event) => setMainCategoryForm((prev) => ({ ...prev, target: event.target.value }))}
+            />
+            <select
+              className="field"
+              value={mainCategoryForm.owner}
+              onChange={(event) => setMainCategoryForm((prev) => ({ ...prev, owner: event.target.value }))}
+            >
+              {OWNERS.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+            </select>
+            <button className="min-h-11 rounded-xl bg-primary text-white font-medium" type="submit">הוספת קטגוריה</button>
+          </form>
+
+          <form onSubmit={onAddCategory} className="grid gap-2 md:grid-cols-4">
+            <input
+              className="field"
+              list="category-groups"
+              placeholder="קטגוריה ראשית"
+              value={categoryForm.parentName}
+              onChange={(event) => setCategoryForm((prev) => ({ ...prev, parentName: event.target.value }))}
+            />
+            <input
+              className="field"
+              placeholder="תת קטגוריה"
+              value={categoryForm.name}
+              onChange={(event) => setCategoryForm((prev) => ({ ...prev, name: event.target.value }))}
+            />
+            <input
+              className="field"
+              type="number"
+              min="0"
+              dir="ltr"
+              placeholder="יעד חודשי"
+              value={categoryForm.target}
+              onChange={(event) => setCategoryForm((prev) => ({ ...prev, target: event.target.value }))}
+            />
+            <button className="min-h-11 rounded-xl bg-primary text-white font-medium" type="submit">הוספת תת קטגוריה</button>
+            <datalist id="category-groups">
+              {categoryGroups.map((groupName) => <option key={groupName} value={groupName} />)}
+            </datalist>
+          </form>
+        </div>
+
+        <input
+          className="field mb-3"
+          placeholder="חיפוש קטגוריה / תת קטגוריה"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+        />
+        <div className="space-y-2">
+          {groupedCategories.length === 0 && <p className="py-10 text-center text-slate-500">אין קטגוריות להצגה</p>}
+          {groupedCategories.map(([groupName, items]) => {
+            const isOpen = openGroups[groupName] ?? false;
+            return (
+              <section key={groupName} className="rounded-2xl border border-slate-100 bg-slate-50 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setOpenGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }))}
+                  className="w-full flex items-center justify-between gap-3 px-3 py-3 text-right hover:bg-white/70"
+                >
+                  <div>
+                    <p className="font-semibold text-sm">{groupName}</p>
+                    <p className="text-xs text-slate-500">{items.length} קטגוריות · כולל תתי קטגוריות</p>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-slate-500 transition ${isOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-slate-100 p-3 space-y-3">
+                    {items.map((category) => (
+                      <article key={category.id} className="rounded-xl border border-slate-100 bg-white p-3 space-y-2">
+                        <div className="grid gap-2 md:grid-cols-12">
+                          <input
+                            className="field md:col-span-3"
+                            list="category-groups"
+                            defaultValue={categoryParent(category)}
+                            onBlur={(event) => {
+                              const value = event.target.value.trim();
+                              if (value && value !== categoryParent(category)) onUpdateCategory(category.id, { parentName: value });
+                            }}
+                          />
+                          <input
+                            className="field md:col-span-4"
+                            defaultValue={categoryChildLabel(category)}
+                            onBlur={(event) => {
+                              const value = event.target.value.trim();
+                              if (value && value !== category.name) onUpdateCategory(category.id, { name: value });
+                            }}
+                          />
+                          <input
+                            className="field md:col-span-2"
+                            type="number"
+                            min="0"
+                            dir="ltr"
+                            defaultValue={category.target}
+                            onBlur={(event) => onUpdateCategory(category.id, { target: Number(event.target.value || 0) })}
+                          />
+                          <label className="md:col-span-2 flex items-center justify-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-2 text-xs text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={!!category.isAuto}
+                              onChange={(event) => onUpdateCategory(category.id, { isAuto: event.target.checked })}
+                              className="h-4 w-4 rounded border-slate-300 text-teal focus:ring-teal"
+                            />
+                            אוטומטית
+                          </label>
+                          <button
+                            type="button"
+                            className="min-h-11 rounded-xl border border-slate-200 bg-white text-red hover:bg-red/10 md:col-span-1"
+                            onClick={() => onDeleteCategory(category.id)}
+                          >
+                            <Trash2 className="mx-auto h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-400">עודכן: {timeText(category.updatedAt || category.createdAt)}</p>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       </Card>
     </div>

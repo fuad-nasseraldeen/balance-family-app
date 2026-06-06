@@ -70,11 +70,37 @@ export async function updateCategory(id, payload) {
 }
 
 export async function deleteCategory(id) {
+  const { data: category, error: fetchError } = await supabase
+    .from("categories")
+    .select("id, name, parent_name")
+    .eq("id", id)
+    .eq("household_id", HOUSEHOLD_ID)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const isParentCategory = category.parent_name === category.name;
+  const idsToDelete = isParentCategory
+    ? [id]
+    : [id];
+
+  if (isParentCategory) {
+    const { data: children, error: childrenError } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("household_id", HOUSEHOLD_ID)
+      .eq("parent_name", category.name);
+
+    if (childrenError) throw childrenError;
+    idsToDelete.push(...(children || []).map((item) => item.id));
+  }
+
   const { error } = await supabase
     .from("categories")
     .delete()
-    .eq("id", id)
+    .in("id", idsToDelete)
     .eq("household_id", HOUSEHOLD_ID);
+
   if (error) throw error;
   return id;
 }
