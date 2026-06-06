@@ -4,9 +4,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Home,
   Settings,
-  Target,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -31,12 +29,10 @@ import { createAutomaticExpenseIfMissing, createExpense, deleteExpense, getExpen
 import { createIncome, getIncomes } from "./services/incomesService";
 import { useSupabaseRealtime } from "./hooks/useSupabaseRealtime";
 
-const OWNER_TABS = ["כללי", "פואד", "חיסן"];
+const OWNER_TABS = ["פואד", "חיסן"];
 const OWNERS = ["פואד", "חיסן"];
 const CHILDREN = ["גוד", "אדם"];
 const APP_PAGES = [
-  { id: "dashboard", label: "דשבורד", icon: Home },
-  { id: "goals", label: "יעדים", icon: Target },
   { id: "settings", label: "הגדרות", icon: Settings }
 ];
 const CHART_COLORS = [
@@ -79,7 +75,7 @@ const monthOptions = Array.from({ length: 24 }, (_, index) => {
 }).reverse();
 
 export default function App() {
-  const [activePage, setActivePage] = useState("dashboard");
+  const [activePage, setActivePage] = useState("settings");
   const [activeTab, setActiveTab] = useState("כללי");
   const [categories, setCategories] = useState([]);
   const [expenses, setExpenses] = useState([]);
@@ -275,24 +271,32 @@ export default function App() {
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
   }, [filteredExpenses, categoryById]);
 
-  const compareData = useMemo(
-    () => OWNERS.map((owner) => ({ name: owner, amount: filteredExpenses.filter((item) => item.owner === owner).reduce((acc, item) => acc + item.amount, 0) })),
-    [filteredExpenses]
-  );
+  const compareData = useMemo(() => {
+    if (activeTab !== "כללי") {
+      return [{ name: activeTab, amount: filteredExpenses.reduce((acc, item) => acc + item.amount, 0) }];
+    }
 
-  const yearlySummary = useMemo(() => {
-    const months = Array.from({ length: 12 }, (_, index) => `${selectedYear}-${String(index + 1).padStart(2, "0")}`);
-    return months.map((month) => {
-      const income = incomes.filter((item) => monthKeyFromDate(item.depositDate) === month).reduce((acc, item) => acc + item.amount, 0);
-      const expense = expenses.filter((item) => monthKeyFromDate(item.expenseDate) === month).reduce((acc, item) => acc + item.amount, 0);
-      const cancelled = cancellations.filter((item) => monthKeyFromDate(item.cancellationDate) === month).reduce((acc, item) => acc + item.amount, 0);
-      return { month, income, expense, cancelled, balance: income - expense };
-    });
-  }, [cancellations, expenses, incomes, selectedYear]);
+    return OWNERS.map((owner) => ({
+      name: owner,
+      amount: filteredExpenses.filter((item) => item.owner === owner).reduce((acc, item) => acc + item.amount, 0)
+    }));
+  }, [activeTab, filteredExpenses]);
 
-  const yearlyIncomeTotal = useMemo(() => yearlySummary.reduce((acc, item) => acc + item.income, 0), [yearlySummary]);
-  const yearlyExpenseTotal = useMemo(() => yearlySummary.reduce((acc, item) => acc + item.expense, 0), [yearlySummary]);
-  const yearlyCancelledTotal = useMemo(() => yearlySummary.reduce((acc, item) => acc + item.cancelled, 0), [yearlySummary]);
+  const monthlySummary = useMemo(() => {
+    const scopeExpenses = activeTab === "כללי" ? expenses : expenses.filter((item) => item.owner === activeTab);
+    const scopeIncomes = activeTab === "כללי" ? incomes : incomes.filter((item) => item.owner === activeTab);
+    const scopeCancellations = activeTab === "כללי" ? cancellations : cancellations.filter((item) => item.owner === activeTab);
+
+    const income = scopeIncomes.filter((item) => monthKeyFromDate(item.depositDate) === selectedMonth).reduce((acc, item) => acc + item.amount, 0);
+    const expense = scopeExpenses.filter((item) => monthKeyFromDate(item.expenseDate) === selectedMonth).reduce((acc, item) => acc + item.amount, 0);
+    const cancelled = scopeCancellations.filter((item) => monthKeyFromDate(item.cancellationDate) === selectedMonth).reduce((acc, item) => acc + item.amount, 0);
+
+    return { income, expense, cancelled, balance: income - expense };
+  }, [activeTab, cancellations, expenses, incomes, selectedMonth]);
+
+  const monthlyIncomeTotal = monthlySummary.income;
+  const monthlyExpenseTotal = monthlySummary.expense;
+  const monthlyCancelledTotal = monthlySummary.cancelled;
   const topCategory = useMemo(() => {
     const totals = new Map();
     filteredExpenses.forEach((item) => {
@@ -488,6 +492,16 @@ export default function App() {
     }
   };
 
+  const handleOwnerTabClick = (tab) => {
+    setActiveTab(tab);
+    setActivePage("dashboard");
+  };
+
+  const handleLogoNavigation = () => {
+    setActiveTab("כללי");
+    setActivePage("dashboard");
+  };
+
   if (loading) {
     return <div className="min-h-screen grid place-items-center text-slate-500">טוען נתונים...</div>;
   }
@@ -496,39 +510,45 @@ export default function App() {
     <div className="min-h-screen bg-background text-primary">
       <header className="bg-primary rounded-b-[2rem] text-white pb-8 pt-6 px-4 shadow-lg">
         <div className="mx-auto max-w-3xl">
-          <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-xl bg-white/15 grid place-items-center">
-              <Wallet className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Balance</h1>
-              <p className="text-sm text-white/80">ניהול הוצאות למשפחתי</p>
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleLogoNavigation}
+              className="flex items-center gap-3 text-right transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-white/40 rounded-xl"
+            >
+              <div className="h-11 w-11 rounded-xl bg-white/15 grid place-items-center">
+                <Wallet className="h-6 w-6" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Balance</h1>
+                <p className="text-sm text-white/80">ניהול הוצאות למשפחתי</p>
+              </div>
+            </button>
+            <div className="flex items-stretch gap-2">
+              {APP_PAGES.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActivePage(id)}
+                  className={`min-h-11 rounded-xl px-3 text-sm font-medium transition inline-flex items-center justify-center gap-2 ${
+                    activePage === id ? "bg-teal text-white" : "bg-white/10 text-white/70"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="mt-5 grid grid-cols-3 gap-2">
+          <div className="mt-5 flex flex-wrap items-stretch gap-2">
             {OWNER_TABS.map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`min-h-11 rounded-xl px-3 text-sm font-medium transition ${
+                onClick={() => handleOwnerTabClick(tab)}
+                className={`min-h-11 flex-1 rounded-xl px-3 text-sm font-medium transition ${
                   activeTab === tab ? "bg-white text-primary" : "bg-white/10 text-white/70"
                 }`}
               >
                 {tab}
-              </button>
-            ))}
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {APP_PAGES.map(({ id, label, icon: Icon }) => (
-              <button
-                key={id}
-                onClick={() => setActivePage(id)}
-                className={`min-h-11 rounded-xl px-2 text-sm font-medium transition inline-flex items-center justify-center gap-2 ${
-                  activePage === id ? "bg-teal text-white" : "bg-white/10 text-white/70"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
               </button>
             ))}
           </div>
@@ -537,9 +557,7 @@ export default function App() {
 
       <main className="mx-auto max-w-3xl px-4 -mt-6 pb-8 space-y-4">
         {error && <div className="card p-3 text-red-600 text-sm">{error}</div>}
-        {activePage === "goals" ? (
-          <GoalsPage categories={categories} expenses={filteredExpenses} onUpdateCategory={handleUpdateCategory} />
-        ) : activePage === "settings" ? (
+        {activePage === "settings" ? (
           <CategorySettingsPage
             categories={categories}
             categoryGroups={categoryGroups}
@@ -705,13 +723,13 @@ export default function App() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <Card title="סקירה שנתית">
+          <Card title="סקירה חודשית">
             <div className="space-y-2 text-sm text-slate-600">
-              <p>סה"כ הכנסות לשנה: <span dir="ltr" className="font-semibold text-primary">{money(yearlyIncomeTotal)}</span></p>
-              <p>סה"כ הוצאות לשנה: <span dir="ltr" className="font-semibold text-red">{money(yearlyExpenseTotal)}</span></p>
-              <p>סה"כ ביטולים לשנה: <span dir="ltr" className="font-semibold text-red">{money(yearlyCancelledTotal)}</span></p>
-              <p>מאזן שנתי: <span dir="ltr" className={`font-semibold ${yearlyIncomeTotal - yearlyExpenseTotal >= 0 ? "text-teal" : "text-red"}`}>{money(yearlyIncomeTotal - yearlyExpenseTotal)}</span></p>
-              <p className="text-xs text-slate-500">הנתונים מתעדכנים לפי חודש ושנה נבחרים.</p>
+              <p>סה"כ הכנסות לחודש: <span dir="ltr" className="font-semibold text-primary">{money(monthlyIncomeTotal)}</span></p>
+              <p>סה"כ הוצאות לחודש: <span dir="ltr" className="font-semibold text-red">{money(monthlyExpenseTotal)}</span></p>
+              <p>סה"כ ביטולים לחודש: <span dir="ltr" className="font-semibold text-red">{money(monthlyCancelledTotal)}</span></p>
+              <p>מאזן חודש: <span dir="ltr" className={`font-semibold ${monthlySummary.balance >= 0 ? "text-teal" : "text-red"}`}>{money(monthlySummary.balance)}</span></p>
+              <p className="text-xs text-slate-500">הנתונים מתעדכנים לפי החודש הנבחר.</p>
             </div>
           </Card>
           <Card title="דוח קטגוריות לחודש">
@@ -1071,14 +1089,17 @@ function CategorySettingsPage({
                               if (value && value !== category.name) onUpdateCategory(category.id, { name: value });
                             }}
                           />
-                          <input
-                            className="field md:col-span-2"
-                            type="number"
-                            min="0"
-                            dir="ltr"
-                            defaultValue={category.target}
-                            onBlur={(event) => onUpdateCategory(category.id, { target: Number(event.target.value || 0) })}
-                          />
+                          <label className="md:col-span-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600 flex flex-col gap-1">
+                            <span>יעד חודשי</span>
+                            <input
+                              className="field"
+                              type="number"
+                              min="0"
+                              dir="ltr"
+                              defaultValue={category.target}
+                              onBlur={(event) => onUpdateCategory(category.id, { target: Number(event.target.value || 0) })}
+                            />
+                          </label>
                           <label className="md:col-span-2 flex items-center justify-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-2 text-xs text-slate-600">
                             <input
                               type="checkbox"
