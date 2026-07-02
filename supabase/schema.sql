@@ -50,7 +50,7 @@ create table if not exists incomes (
   owner text not null check (owner in ('fuad', 'hesen')),
   amount numeric not null check (amount >= 0),
   deposit_date date not null,
-  payment_method text not null check (payment_method in ('cash', 'bank_transfer')),
+  payment_method text not null check (payment_method in ('cash', 'bank_transfer', 'debt')),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

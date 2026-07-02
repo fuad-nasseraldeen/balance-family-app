@@ -3,6 +3,9 @@ import { ownerDbToUi, ownerUiToDb } from "../constants/owners";
 import { supabase } from "../lib/supabaseClient";
 
 function paymentDbToUi(value) {
+  if (value === "מזומן") return "מזומן";
+  if (value === "העברה בנקאית") return "העברה בנקאית";
+  if (value === "חוב") return "חוב";
   if (value === "cash") return "מזומן";
   if (value === "bank_transfer") return "העברה בנקאית";
   if (value === "debt") return "חוב";
@@ -10,6 +13,9 @@ function paymentDbToUi(value) {
 }
 
 function paymentUiToDb(value) {
+  if (value === "cash") return "cash";
+  if (value === "bank_transfer") return "bank_transfer";
+  if (value === "debt") return "debt";
   if (value === "העברה בנקאית") return "bank_transfer";
   if (value === "חוב") return "debt";
   return "cash";

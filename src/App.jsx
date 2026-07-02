@@ -911,7 +911,7 @@ export default function App() {
                 <div key={income.id} className="flex items-start justify-between rounded-xl border border-slate-100 p-3">
                   <div>
                     <p className="font-semibold">{income.source || "הכנסה"} · {income.owner}</p>
-                    <p className="text-xs text-slate-500">{dateText(income.depositDate)} {income.note ? `• ${income.note}` : ""}</p>
+                    <p className="text-xs text-slate-500">{dateText(income.depositDate)} · {income.paymentMethod} {income.note ? `• ${income.note}` : ""}</p>
                     <p className="text-xs text-slate-400">עודכן: {timeText(income.updatedAt || income.createdAt)}</p>
                   </div>
                   <span className="font-semibold text-teal" dir="ltr">{money(income.amount)}</span>
