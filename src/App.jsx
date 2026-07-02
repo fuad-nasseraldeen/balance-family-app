@@ -28,9 +28,11 @@ import { createCancellation, deleteCancellation, getCancellations } from "./serv
 import { createAutomaticExpenseIfMissing, createExpense, deleteExpense, getExpenses } from "./services/expensesService";
 import { createIncome, getIncomes } from "./services/incomesService";
 import { useSupabaseRealtime } from "./hooks/useSupabaseRealtime";
+import HebrewDateInput from "./components/HebrewDateInput";
 
 const OWNER_TABS = ["פואד", "חיסן"];
 const OWNERS = ["פואד", "חיסן"];
+const INCOME_PAYMENT_METHODS = ["מזומן", "העברה בנקאית", "חוב"];
 const CHILDREN = ["גוד", "אדם"];
 const APP_PAGES = [
   { id: "settings", label: "הגדרות", icon: Settings }
@@ -59,9 +61,10 @@ const CATEGORY_PARENT_BY_CHILD = CATEGORY_TREE.reduce((acc, group) => {
 }, {});
 
 const money = (v) => `₪ ${Number(v || 0).toLocaleString("he-IL")}`;
-const dateText = (iso) => new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-const timeText = (iso) => (iso ? new Date(iso).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
+const dateText = (iso) => new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "long", year: "numeric" });
+const timeText = (iso) => (iso ? new Date(iso).toLocaleString("he-IL", { day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" }) : "");
 const monthKeyFromDate = (iso) => (iso ? iso.slice(0, 7) : "");
+const currentDateKey = () => new Date().toISOString().slice(0, 10);
 const truncateText = (text, max = 18) => (text.length > max ? `${text.slice(0, max)}...` : text);
 const categoryParent = (category) => category?.parentName || CATEGORY_PARENT_BY_CHILD[category?.name] || category?.name || "ללא קטגוריה";
 const categoryChildLabel = (category) => (category?.name === categoryParent(category) ? "כללי" : category?.name || "ללא תת קטגוריה");
@@ -86,12 +89,31 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [selectedYear, setSelectedYear] = useState(currentYear());
   const [showMonthDetails, setShowMonthDetails] = useState(false);
-  const [expenseForm, setExpenseForm] = useState({ amount: "", categoryGroup: "", categoryId: "", description: "", owner: "פואד", expenseDate: currentMonthKey() + "-01" });
-  const [incomeForm, setIncomeForm] = useState({ amount: "", source: "", owner: "פואד", description: "", incomeDate: currentMonthKey() + "-01" });
-  const [cancellationForm, setCancellationForm] = useState({ amount: "", clientName: "", note: "", cancellationDate: currentMonthKey() + "-01" });
+  const [expenseForm, setExpenseForm] = useState({ amount: "", categoryGroup: "", categoryId: "", description: "", owner: "פואד", expenseDate: currentDateKey() });
+  const [incomeForm, setIncomeForm] = useState({ amount: "", source: "", owner: "פואד", paymentMethod: "מזומן", description: "", incomeDate: currentDateKey() });
+  const [cancellationForm, setCancellationForm] = useState({ amount: "", clientName: "", note: "", cancellationDate: currentDateKey(), owner: "חיסן" });
+  const [isExpenseSectionOpen, setIsExpenseSectionOpen] = useState(false);
+  const [isIncomeSectionOpen, setIsIncomeSectionOpen] = useState(false);
+  const [isCancellationSectionOpen, setIsCancellationSectionOpen] = useState(false);
   const [categoryForm, setCategoryForm] = useState({ parentName: "", name: "", target: "" });
   const [mainCategoryForm, setMainCategoryForm] = useState({ name: "", target: "", owner: "פואד" });
   const [childActivityForm, setChildActivityForm] = useState({ name: "", child: CHILDREN[0], target: "" });
+
+  useEffect(() => {
+    if (activeTab !== "כללי") {
+      setExpenseForm((prev) => ({ ...prev, owner: activeTab }));
+      setIncomeForm((prev) => ({ ...prev, owner: activeTab }));
+      setCancellationForm((prev) => ({ ...prev, owner: activeTab }));
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activePage !== "settings") {
+      setIsExpenseSectionOpen(false);
+      setIsIncomeSectionOpen(false);
+      setIsCancellationSectionOpen(false);
+    }
+  }, [activePage]);
 
   useEffect(() => {
     let active = true;
@@ -329,11 +351,11 @@ export default function App() {
         owner: expenseForm.owner,
         paidBy: expenseForm.owner,
         note: expenseForm.description || null,
-        expenseDate: expenseForm.expenseDate || `${selectedMonth}-01`,
+        expenseDate: expenseForm.expenseDate || currentDateKey(),
         isAutomatic: false
       });
       setExpenses((prev) => [saved, ...prev]);
-      setExpenseForm((prev) => ({ ...prev, amount: "", categoryId: "", description: "", expenseDate: `${selectedMonth}-01` }));
+      setExpenseForm((prev) => ({ ...prev, amount: "", categoryId: "", description: "", expenseDate: currentDateKey() }));
     } catch (err) {
       console.error(err);
       setError("שמירת הוצאה נכשלה");
@@ -350,11 +372,11 @@ export default function App() {
         owner: incomeForm.owner,
         source: incomeForm.source || "משכורת",
         note: incomeForm.description || null,
-        depositDate: incomeForm.incomeDate || `${selectedMonth}-01`,
-        paymentMethod: "מזומן"
+        depositDate: incomeForm.incomeDate || currentDateKey(),
+        paymentMethod: incomeForm.paymentMethod || "מזומן"
       });
       setIncomes((prev) => [saved, ...prev]);
-      setIncomeForm((prev) => ({ ...prev, amount: "", source: "", description: "", incomeDate: `${selectedMonth}-01` }));
+      setIncomeForm((prev) => ({ ...prev, amount: "", source: "", description: "", incomeDate: currentDateKey(), paymentMethod: "מזומן" }));
     } catch (err) {
       console.error(err);
       setError("שמירת הכנסה נכשלה");
@@ -368,7 +390,7 @@ export default function App() {
     try {
       const saved = await createCancellation({
         amount: Number(cancellationForm.amount),
-        owner: "חיסן",
+        owner: cancellationForm.owner || "חיסן",
         clientName: cancellationForm.clientName || null,
         note: cancellationForm.note || null,
         cancellationDate: cancellationForm.cancellationDate || `${selectedMonth}-01`
@@ -607,57 +629,138 @@ export default function App() {
         </section>
         <SummaryCards totalBudget={totalBudget} totalSpent={totalSpent} totalCancelled={totalCancelled} balance={balance} />
 
-        <Card title="+ הוספת הוצאה">
-          <form onSubmit={handleAddExpense} className="grid gap-2 md:grid-cols-5">
-            <input className="field" type="number" min="0" dir="ltr" placeholder="סכום" value={expenseForm.amount} onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: e.target.value }))} />
-            <input className="field" type="date" value={expenseForm.expenseDate} onChange={(e) => setExpenseForm((prev) => ({ ...prev, expenseDate: e.target.value }))} />
-            <select className="field" value={expenseForm.categoryGroup} onChange={(e) => setExpenseForm((prev) => ({ ...prev, categoryGroup: e.target.value, categoryId: "" }))}>
-              <option value="">בחר קטגוריה</option>
-              {categoryGroups.map((groupName) => (
-                <option key={groupName} value={groupName}>
-                  {truncateText(groupName, 24)}
-                </option>
-              ))}
-            </select>
-            <select className="field" value={expenseForm.categoryId} onChange={(e) => setExpenseForm((prev) => ({ ...prev, categoryId: e.target.value }))} disabled={!expenseForm.categoryGroup}>
-              <option value="">בחר תת קטגוריה</option>
-              {subcategoriesForSelectedGroup.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {truncateText(categoryChildLabel(category), 24)} ({money(category.target)})
-                </option>
-              ))}
-            </select>
-            <select className="field" value={expenseForm.owner} onChange={(e) => setExpenseForm((prev) => ({ ...prev, owner: e.target.value }))}>
-              {OWNERS.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
-            </select>
-            <button className="min-h-11 rounded-xl bg-primary text-white font-medium" type="submit">שמירה</button>
-            <input className="field md:col-span-5" placeholder="תיעוד / הערה" value={expenseForm.description} onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))} />
-          </form>
-        </Card>
+        <Card title="+ פעולות הכנסה / הוצאה / ביטול">
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-slate-700"
+                onClick={() => {
+                  const next = !isExpenseSectionOpen;
+                  setIsExpenseSectionOpen(next);
+                  setIsIncomeSectionOpen(false);
+                  setIsCancellationSectionOpen(false);
+                }}
+              >
+                <span>הוספת הוצאה</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isExpenseSectionOpen ? "rotate-180" : ""}`} />
+              </button>
+              {isExpenseSectionOpen && (
+                <div className="border-t border-slate-200 p-4">
+                  <form onSubmit={handleAddExpense} className="grid grid-cols-2 gap-2 md:grid-cols-6">
+                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום" value={expenseForm.amount} onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: e.target.value }))} />
+                    <select className="field" value={expenseForm.categoryGroup} onChange={(e) => setExpenseForm((prev) => ({ ...prev, categoryGroup: e.target.value, categoryId: "" }))}>
+                      <option value="">בחר קטגוריה</option>
+                      {categoryGroups.map((groupName) => (
+                        <option key={groupName} value={groupName}>
+                          {truncateText(groupName, 24)}
+                        </option>
+                      ))}
+                    </select>
+                    <select className="field col-span-2 md:col-span-2" value={expenseForm.categoryId} onChange={(e) => setExpenseForm((prev) => ({ ...prev, categoryId: e.target.value }))} disabled={!expenseForm.categoryGroup}>
+                      <option value="">בחר תת קטגוריה</option>
+                      {subcategoriesForSelectedGroup.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {truncateText(categoryChildLabel(category), 24)} ({money(category.target)})
+                        </option>
+                      ))}
+                    </select>
+                    <HebrewDateInput
+                      name="expenseDate"
+                      value={expenseForm.expenseDate}
+                      onChange={(value) => setExpenseForm((prev) => ({ ...prev, expenseDate: value }))}
+                      placeholder="תאריך"
+                      className="w-full"
+                      inputClassName="field"
+                      required
+                    />
+                    <select className="field" value={expenseForm.owner} onChange={(e) => setExpenseForm((prev) => ({ ...prev, owner: e.target.value }))}>
+                      {OWNERS.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                    </select>
+                    <button className="min-h-11 rounded-xl bg-primary text-white font-medium" type="submit">שמירה</button>
+                    <input className="field md:col-span-6" placeholder="תיעוד / הערה" value={expenseForm.description} onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))} />
+                  </form>
+                </div>
+              )}
+            </div>
 
-        <Card title="+ הוספת הכנסה">
-          <form onSubmit={handleAddIncome} className="grid gap-2 md:grid-cols-5">
-            <input className="field" type="number" min="0" dir="ltr" placeholder="סכום" value={incomeForm.amount} onChange={(e) => setIncomeForm((prev) => ({ ...prev, amount: e.target.value }))} />
-            <input className="field" type="date" value={incomeForm.incomeDate} onChange={(e) => setIncomeForm((prev) => ({ ...prev, incomeDate: e.target.value }))} />
-            <input className="field" placeholder="מקור הכנסה" value={incomeForm.source} onChange={(e) => setIncomeForm((prev) => ({ ...prev, source: e.target.value }))} />
-            <select className="field" value={incomeForm.owner} onChange={(e) => setIncomeForm((prev) => ({ ...prev, owner: e.target.value }))}>
-              {OWNERS.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
-            </select>
-            <input className="field" value="מזומן" readOnly />
-            <button className="min-h-11 rounded-xl bg-teal text-white font-medium" type="submit">שמירת הכנסה</button>
-            <input className="field md:col-span-5" placeholder="תיעוד / הערה" value={incomeForm.description} onChange={(e) => setIncomeForm((prev) => ({ ...prev, description: e.target.value }))} />
-          </form>
-        </Card>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-slate-700"
+                onClick={() => {
+                  const next = !isIncomeSectionOpen;
+                  setIsIncomeSectionOpen(next);
+                  setIsExpenseSectionOpen(false);
+                  setIsCancellationSectionOpen(false);
+                }}
+              >
+                <span>הוספת הכנסה</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isIncomeSectionOpen ? "rotate-180" : ""}`} />
+              </button>
+              {isIncomeSectionOpen && (
+                <div className="border-t border-slate-200 p-4">
+                  <form onSubmit={handleAddIncome} className="grid grid-cols-2 gap-2 md:grid-cols-6">
+                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום" value={incomeForm.amount} onChange={(e) => setIncomeForm((prev) => ({ ...prev, amount: e.target.value }))} />
+                    <input className="field" placeholder="מקור הכנסה" value={incomeForm.source} onChange={(e) => setIncomeForm((prev) => ({ ...prev, source: e.target.value }))} />
+                    <HebrewDateInput
+                      name="incomeDate"
+                      value={incomeForm.incomeDate}
+                      onChange={(value) => setIncomeForm((prev) => ({ ...prev, incomeDate: value }))}
+                      placeholder="תאריך"
+                      className="w-full"
+                      inputClassName="field"
+                      required
+                    />
+                    <select className="field" value={incomeForm.owner} onChange={(e) => setIncomeForm((prev) => ({ ...prev, owner: e.target.value }))}>
+                      {OWNERS.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                    </select>
+                    <select className="field" value={incomeForm.paymentMethod} onChange={(e) => setIncomeForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}>
+                      {INCOME_PAYMENT_METHODS.map((paymentMethod) => (<option key={paymentMethod} value={paymentMethod}>{paymentMethod}</option>))}
+                    </select>
+                    <button className="min-h-11 rounded-xl bg-teal text-white font-medium" type="submit">שמירת הכנסה</button>
+                    <input className="field md:col-span-6" placeholder="תיעוד / הערה" value={incomeForm.description} onChange={(e) => setIncomeForm((prev) => ({ ...prev, description: e.target.value }))} />
+                  </form>
+                </div>
+              )}
+            </div>
 
-        <Card title="+ ביטול תור של חיסן">
-          <form onSubmit={handleAddCancellation} className="grid gap-2 md:grid-cols-5">
-            <input className="field" type="number" min="0" dir="ltr" placeholder="סכום שלא נגבה" value={cancellationForm.amount} onChange={(e) => setCancellationForm((prev) => ({ ...prev, amount: e.target.value }))} />
-            <input className="field" type="date" value={cancellationForm.cancellationDate} onChange={(e) => setCancellationForm((prev) => ({ ...prev, cancellationDate: e.target.value }))} />
-            <input className="field" placeholder="שם לקוח / תור" value={cancellationForm.clientName} onChange={(e) => setCancellationForm((prev) => ({ ...prev, clientName: e.target.value }))} />
-            <input className="field" value="חיסן" readOnly />
-            <button className="min-h-11 rounded-xl bg-red text-white font-medium" type="submit">שמירת ביטול</button>
-            <input className="field md:col-span-5" placeholder="תיעוד / סיבת ביטול" value={cancellationForm.note} onChange={(e) => setCancellationForm((prev) => ({ ...prev, note: e.target.value }))} />
-          </form>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-slate-700"
+                onClick={() => {
+                  const next = !isCancellationSectionOpen;
+                  setIsCancellationSectionOpen(next);
+                  setIsExpenseSectionOpen(false);
+                  setIsIncomeSectionOpen(false);
+                }}
+              >
+                <span>ביטול תור של חיסן</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isCancellationSectionOpen ? "rotate-180" : ""}`} />
+              </button>
+              {isCancellationSectionOpen && (
+                <div className="border-t border-slate-200 p-4">
+                  <form onSubmit={handleAddCancellation} className="grid gap-2 md:grid-cols-6">
+                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום שלא נגבה" value={cancellationForm.amount} onChange={(e) => setCancellationForm((prev) => ({ ...prev, amount: e.target.value }))} />
+                    <input className="field" placeholder="שם לקוח / תור" value={cancellationForm.clientName} onChange={(e) => setCancellationForm((prev) => ({ ...prev, clientName: e.target.value }))} />
+                    <HebrewDateInput
+                      name="cancellationDate"
+                      value={cancellationForm.cancellationDate}
+                      onChange={(value) => setCancellationForm((prev) => ({ ...prev, cancellationDate: value }))}
+                      placeholder="תאריך"
+                      className="w-full"
+                      inputClassName="field"
+                      required
+                    />
+                    <input className="field" value={activeTab !== "כללי" ? activeTab : "חיסן"} readOnly />
+                    <button className="min-h-11 rounded-xl bg-red text-white font-medium" type="submit">שמירת ביטול</button>
+                    <input className="field md:col-span-6" placeholder="תיעוד / סיבת ביטול" value={cancellationForm.note} onChange={(e) => setCancellationForm((prev) => ({ ...prev, note: e.target.value }))} />
+                  </form>
+                </div>
+              )}
+            </div>
+          </div>
         </Card>
 
         <div className="grid gap-4 md:grid-cols-3">

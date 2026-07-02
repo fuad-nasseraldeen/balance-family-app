@@ -5,11 +5,13 @@ import { supabase } from "../lib/supabaseClient";
 function paymentDbToUi(value) {
   if (value === "cash") return "מזומן";
   if (value === "bank_transfer") return "העברה בנקאית";
+  if (value === "debt") return "חוב";
   return "מזומן";
 }
 
 function paymentUiToDb(value) {
   if (value === "העברה בנקאית") return "bank_transfer";
+  if (value === "חוב") return "debt";
   return "cash";
 }
 

@@ -47,7 +47,7 @@ export default function ExpenseManager({ expenses, categories, onUpdateExpense, 
             </button>
 
             <div className="col-span-12 text-xs text-slate-500 flex items-center justify-between">
-              <span>{new Date(exp.createdAt).toLocaleDateString("he-IL")}</span>
+              <span>{new Date(exp.createdAt).toLocaleDateString("he-IL", { day: "2-digit", month: "long", year: "numeric" })}</span>
               <span>{formatCurrency(exp.amount)}</span>
             </div>
           </div>

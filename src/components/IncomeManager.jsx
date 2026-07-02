@@ -1,7 +1,9 @@
 import { PlusCircle, Trash2 } from "lucide-react";
 import { formatCurrency } from "../utils";
+import HebrewDateInput from "./HebrewDateInput";
 
-const PAYMENT_METHODS = ["מזומן", "העברה בנקאית"];
+const PAYMENT_METHODS = ["מזומן", "העברה בנקאית", "חוב"];
+const currentDate = new Date().toISOString().slice(0, 10);
 
 export default function IncomeManager({ incomes, onAddIncome, onUpdateIncome, onDeleteIncome, owner, isGeneralView }) {
   function handleSubmit(e) {
@@ -28,6 +30,7 @@ export default function IncomeManager({ incomes, onAddIncome, onUpdateIncome, on
   const transferTotal = incomes
     .filter((income) => income.paymentMethod === "העברה בנקאית")
     .reduce((sum, income) => sum + income.amount, 0);
+  const debtTotal = incomes.filter((income) => income.paymentMethod === "חוב").reduce((sum, income) => sum + income.amount, 0);
 
   return (
     <section className="bg-white rounded-2xl shadow-soft border border-slate-100 p-5 md:p-6 space-y-4">
@@ -39,7 +42,14 @@ export default function IncomeManager({ incomes, onAddIncome, onUpdateIncome, on
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3">
         <input name="amount" type="number" min="0" step="1" required placeholder="סכום" className="rounded-xl border border-slate-200 px-4 py-3" />
 
-        <input name="depositDate" type="date" required className="rounded-xl border border-slate-200 px-4 py-3" />
+        <HebrewDateInput
+          name="depositDate"
+          defaultValue={currentDate}
+          placeholder="תאריך"
+          className="rounded-xl"
+          inputClassName="rounded-xl border border-slate-200 px-4 py-3"
+          required
+        />
 
         <select name="paymentMethod" required defaultValue="" className="rounded-xl border border-slate-200 px-4 py-3">
           <option value="" disabled>
@@ -69,9 +79,10 @@ export default function IncomeManager({ incomes, onAddIncome, onUpdateIncome, on
         </button>
       </form>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <SummaryCard title="מזומן" value={cashTotal} />
         <SummaryCard title="העברה בנקאית" value={transferTotal} />
+        <SummaryCard title="חוב" value={debtTotal} />
       </div>
 
       <div className="space-y-3 max-h-80 overflow-auto">
@@ -91,11 +102,11 @@ export default function IncomeManager({ incomes, onAddIncome, onUpdateIncome, on
             </div>
 
             <div className="col-span-6 md:col-span-3">
-              <input
-                type="date"
+              <HebrewDateInput
                 value={income.depositDate}
-                onChange={(e) => onUpdateIncome(income.id, { depositDate: e.target.value })}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                onChange={(value) => onUpdateIncome(income.id, { depositDate: value })}
+                className="w-full"
+                inputClassName="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
               />
             </div>
 
@@ -123,7 +134,7 @@ export default function IncomeManager({ incomes, onAddIncome, onUpdateIncome, on
             </button>
 
             <div className="col-span-12 text-xs text-slate-500 flex items-center justify-between">
-              <span>{new Date(income.createdAt).toLocaleDateString("he-IL")}</span>
+              <span>{new Date(income.createdAt).toLocaleDateString("he-IL", { day: "2-digit", month: "long", year: "numeric" })}</span>
               <span>{formatCurrency(income.amount)}</span>
             </div>
           </div>
