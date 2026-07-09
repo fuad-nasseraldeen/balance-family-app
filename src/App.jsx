@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  LoaderCircle,
   Settings,
   Trash2,
   TrendingDown,
@@ -98,6 +99,21 @@ export default function App() {
   const [categoryForm, setCategoryForm] = useState({ parentName: "", name: "", target: "" });
   const [mainCategoryForm, setMainCategoryForm] = useState({ name: "", target: "", owner: "פואד" });
   const [childActivityForm, setChildActivityForm] = useState({ name: "", child: CHILDREN[0], target: "" });
+  const [pendingKeys, setPendingKeys] = useState([]);
+
+  const addPendingKey = useCallback((key) => {
+    setPendingKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+  }, []);
+
+  const removePendingKey = useCallback((key) => {
+    setPendingKeys((prev) => prev.filter((item) => item !== key));
+  }, []);
+
+  const isPending = useCallback((key) => pendingKeys.includes(key), [pendingKeys]);
+  const hasPending = pendingKeys.length > 0;
+  const isExpenseSubmitting = isPending("expense:create");
+  const isIncomeSubmitting = isPending("income:create");
+  const isCancellationSubmitting = isPending("cancellation:create");
 
   useEffect(() => {
     if (activeTab !== "כללי") {
@@ -343,8 +359,11 @@ export default function App() {
   const handleAddExpense = async (event) => {
     event.preventDefault();
     if (!expenseForm.amount || !expenseForm.categoryId) return;
+    const pendingKey = "expense:create";
 
     try {
+      setError("");
+      addPendingKey(pendingKey);
       const saved = await createExpense({
         amount: Number(expenseForm.amount),
         categoryId: expenseForm.categoryId,
@@ -359,14 +378,19 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setError("שמירת הוצאה נכשלה");
+    } finally {
+      removePendingKey(pendingKey);
     }
   };
 
   const handleAddIncome = async (event) => {
     event.preventDefault();
     if (!incomeForm.amount) return;
+    const pendingKey = "income:create";
 
     try {
+      setError("");
+      addPendingKey(pendingKey);
       const saved = await createIncome({
         amount: Number(incomeForm.amount),
         owner: incomeForm.owner,
@@ -380,14 +404,19 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setError("שמירת הכנסה נכשלה");
+    } finally {
+      removePendingKey(pendingKey);
     }
   };
 
   const handleAddCancellation = async (event) => {
     event.preventDefault();
     if (!cancellationForm.amount) return;
+    const pendingKey = "cancellation:create";
 
     try {
+      setError("");
+      addPendingKey(pendingKey);
       const saved = await createCancellation({
         amount: Number(cancellationForm.amount),
         owner: cancellationForm.owner || "חיסן",
@@ -400,28 +429,40 @@ export default function App() {
     } catch (err) {
       console.error(err);
       setError("שמירת ביטול נכשלה");
+    } finally {
+      removePendingKey(pendingKey);
     }
   };
 
   const handleDeleteExpense = async (id) => {
+    const pendingKey = `expense:delete:${id}`;
+    addPendingKey(pendingKey);
     setExpenses((prev) => prev.filter((expense) => expense.id !== id));
     try {
+      setError("");
       await deleteExpense(id);
     } catch (err) {
       console.error(err);
       setError("מחיקת הוצאה נכשלה");
       getExpenses().then(setExpenses).catch(console.error);
+    } finally {
+      removePendingKey(pendingKey);
     }
   };
 
   const handleDeleteCancellation = async (id) => {
+    const pendingKey = `cancellation:delete:${id}`;
+    addPendingKey(pendingKey);
     setCancellations((prev) => prev.filter((cancellation) => cancellation.id !== id));
     try {
+      setError("");
       await deleteCancellation(id);
     } catch (err) {
       console.error(err);
       setError("מחיקת ביטול נכשלה");
       getCancellations().then(setCancellations).catch(console.error);
+    } finally {
+      removePendingKey(pendingKey);
     }
   };
 
@@ -525,11 +566,29 @@ export default function App() {
   };
 
   if (loading) {
-    return <div className="min-h-screen grid place-items-center text-slate-500">טוען נתונים...</div>;
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="grid min-h-screen place-items-center px-4">
+          <div className="flex w-full max-w-sm flex-col items-center gap-5 rounded-[2rem] border border-slate-200 bg-white p-8 text-center shadow-lg">
+            <div className="relative">
+              <div className="h-20 w-20 rounded-full border-4 border-slate-200" />
+              <div className="absolute inset-0 h-20 w-20 animate-spin rounded-full border-4 border-transparent border-t-primary border-r-teal" />
+              <div className="absolute inset-3 rounded-full bg-slate-50" />
+            </div>
+            <div className="w-full space-y-3">
+              <p className="text-lg font-semibold text-primary">טוען נתונים</p>
+              <p className="text-sm text-slate-500">מכין הכנסות, הוצאות וביטולים לתצוגה</p>
+              <AnimatedProgressBar label="טוען נתונים" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="min-h-screen bg-background text-primary">
+      <LoadingTopBar visible={hasPending} />
       <header className="bg-primary rounded-b-[2rem] text-white pb-8 pt-6 px-4 shadow-lg">
         <div className="mx-auto max-w-3xl">
           <div className="flex items-center justify-between gap-3">
@@ -648,8 +707,8 @@ export default function App() {
               {isExpenseSectionOpen && (
                 <div className="border-t border-slate-200 p-4">
                   <form onSubmit={handleAddExpense} className="grid grid-cols-2 gap-2 md:grid-cols-6">
-                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום" value={expenseForm.amount} onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: e.target.value }))} />
-                    <select className="field" value={expenseForm.categoryGroup} onChange={(e) => setExpenseForm((prev) => ({ ...prev, categoryGroup: e.target.value, categoryId: "" }))}>
+                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום" value={expenseForm.amount} onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: e.target.value }))} disabled={isExpenseSubmitting} />
+                    <select className="field" value={expenseForm.categoryGroup} onChange={(e) => setExpenseForm((prev) => ({ ...prev, categoryGroup: e.target.value, categoryId: "" }))} disabled={isExpenseSubmitting}>
                       <option value="">בחר קטגוריה</option>
                       {categoryGroups.map((groupName) => (
                         <option key={groupName} value={groupName}>
@@ -657,7 +716,7 @@ export default function App() {
                         </option>
                       ))}
                     </select>
-                    <select className="field col-span-2 md:col-span-2" value={expenseForm.categoryId} onChange={(e) => setExpenseForm((prev) => ({ ...prev, categoryId: e.target.value }))} disabled={!expenseForm.categoryGroup}>
+                    <select className="field col-span-2 md:col-span-2" value={expenseForm.categoryId} onChange={(e) => setExpenseForm((prev) => ({ ...prev, categoryId: e.target.value }))} disabled={!expenseForm.categoryGroup || isExpenseSubmitting}>
                       <option value="">בחר תת קטגוריה</option>
                       {subcategoriesForSelectedGroup.map((category) => (
                         <option key={category.id} value={category.id}>
@@ -673,12 +732,15 @@ export default function App() {
                       className="w-full"
                       inputClassName="field"
                       required
+                      disabled={isExpenseSubmitting}
                     />
-                    <select className="field" value={expenseForm.owner} onChange={(e) => setExpenseForm((prev) => ({ ...prev, owner: e.target.value }))}>
+                    <select className="field" value={expenseForm.owner} onChange={(e) => setExpenseForm((prev) => ({ ...prev, owner: e.target.value }))} disabled={isExpenseSubmitting}>
                       {OWNERS.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
                     </select>
-                    <button className="min-h-11 rounded-xl bg-primary text-white font-medium" type="submit">שמירה</button>
-                    <input className="field md:col-span-6" placeholder="תיעוד / הערה" value={expenseForm.description} onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))} />
+                    <button className="min-h-11 rounded-xl bg-primary text-white font-medium disabled:cursor-wait disabled:opacity-80" type="submit" disabled={isExpenseSubmitting}>
+                      <LoadingButtonContent loading={isExpenseSubmitting} label="שמירה" />
+                    </button>
+                    <input className="field md:col-span-6" placeholder="תיעוד / הערה" value={expenseForm.description} onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))} disabled={isExpenseSubmitting} />
                   </form>
                 </div>
               )}
@@ -701,8 +763,8 @@ export default function App() {
               {isIncomeSectionOpen && (
                 <div className="border-t border-slate-200 p-4">
                   <form onSubmit={handleAddIncome} className="grid grid-cols-2 gap-2 md:grid-cols-6">
-                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום" value={incomeForm.amount} onChange={(e) => setIncomeForm((prev) => ({ ...prev, amount: e.target.value }))} />
-                    <input className="field" placeholder="מקור הכנסה" value={incomeForm.source} onChange={(e) => setIncomeForm((prev) => ({ ...prev, source: e.target.value }))} />
+                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום" value={incomeForm.amount} onChange={(e) => setIncomeForm((prev) => ({ ...prev, amount: e.target.value }))} disabled={isIncomeSubmitting} />
+                    <input className="field" placeholder="מקור הכנסה" value={incomeForm.source} onChange={(e) => setIncomeForm((prev) => ({ ...prev, source: e.target.value }))} disabled={isIncomeSubmitting} />
                     <HebrewDateInput
                       name="incomeDate"
                       value={incomeForm.incomeDate}
@@ -711,15 +773,18 @@ export default function App() {
                       className="w-full"
                       inputClassName="field"
                       required
+                      disabled={isIncomeSubmitting}
                     />
-                    <select className="field" value={incomeForm.owner} onChange={(e) => setIncomeForm((prev) => ({ ...prev, owner: e.target.value }))}>
+                    <select className="field" value={incomeForm.owner} onChange={(e) => setIncomeForm((prev) => ({ ...prev, owner: e.target.value }))} disabled={isIncomeSubmitting}>
                       {OWNERS.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
                     </select>
-                    <select className="field" value={incomeForm.paymentMethod} onChange={(e) => setIncomeForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}>
+                    <select className="field" value={incomeForm.paymentMethod} onChange={(e) => setIncomeForm((prev) => ({ ...prev, paymentMethod: e.target.value }))} disabled={isIncomeSubmitting}>
                       {INCOME_PAYMENT_METHODS.map((paymentMethod) => (<option key={paymentMethod} value={paymentMethod}>{paymentMethod}</option>))}
                     </select>
-                    <button className="min-h-11 rounded-xl bg-teal text-white font-medium" type="submit">שמירת הכנסה</button>
-                    <input className="field md:col-span-6" placeholder="תיעוד / הערה" value={incomeForm.description} onChange={(e) => setIncomeForm((prev) => ({ ...prev, description: e.target.value }))} />
+                    <button className="min-h-11 rounded-xl bg-teal text-white font-medium disabled:cursor-wait disabled:opacity-80" type="submit" disabled={isIncomeSubmitting}>
+                      <LoadingButtonContent loading={isIncomeSubmitting} label="שמירת הכנסה" />
+                    </button>
+                    <input className="field md:col-span-6" placeholder="תיעוד / הערה" value={incomeForm.description} onChange={(e) => setIncomeForm((prev) => ({ ...prev, description: e.target.value }))} disabled={isIncomeSubmitting} />
                   </form>
                 </div>
               )}
@@ -742,8 +807,8 @@ export default function App() {
               {isCancellationSectionOpen && (
                 <div className="border-t border-slate-200 p-4">
                   <form onSubmit={handleAddCancellation} className="grid gap-2 md:grid-cols-6">
-                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום שלא נגבה" value={cancellationForm.amount} onChange={(e) => setCancellationForm((prev) => ({ ...prev, amount: e.target.value }))} />
-                    <input className="field" placeholder="שם לקוח / תור" value={cancellationForm.clientName} onChange={(e) => setCancellationForm((prev) => ({ ...prev, clientName: e.target.value }))} />
+                    <input className="field" type="number" min="0" dir="ltr" placeholder="סכום שלא נגבה" value={cancellationForm.amount} onChange={(e) => setCancellationForm((prev) => ({ ...prev, amount: e.target.value }))} disabled={isCancellationSubmitting} />
+                    <input className="field" placeholder="שם לקוח / תור" value={cancellationForm.clientName} onChange={(e) => setCancellationForm((prev) => ({ ...prev, clientName: e.target.value }))} disabled={isCancellationSubmitting} />
                     <HebrewDateInput
                       name="cancellationDate"
                       value={cancellationForm.cancellationDate}
@@ -752,10 +817,13 @@ export default function App() {
                       className="w-full"
                       inputClassName="field"
                       required
+                      disabled={isCancellationSubmitting}
                     />
-                    <input className="field" value={activeTab !== "כללי" ? activeTab : "חיסן"} readOnly />
-                    <button className="min-h-11 rounded-xl bg-red text-white font-medium" type="submit">שמירת ביטול</button>
-                    <input className="field md:col-span-6" placeholder="תיעוד / סיבת ביטול" value={cancellationForm.note} onChange={(e) => setCancellationForm((prev) => ({ ...prev, note: e.target.value }))} />
+                    <input className="field" value={activeTab !== "כללי" ? activeTab : "חיסן"} readOnly disabled={isCancellationSubmitting} />
+                    <button className="min-h-11 rounded-xl bg-red text-white font-medium disabled:cursor-wait disabled:opacity-80" type="submit" disabled={isCancellationSubmitting}>
+                      <LoadingButtonContent loading={isCancellationSubmitting} label="שמירת ביטול" />
+                    </button>
+                    <input className="field md:col-span-6" placeholder="תיעוד / סיבת ביטול" value={cancellationForm.note} onChange={(e) => setCancellationForm((prev) => ({ ...prev, note: e.target.value }))} disabled={isCancellationSubmitting} />
                   </form>
                 </div>
               )}
@@ -880,7 +948,9 @@ export default function App() {
           <Card title="הוצאות אחרונות">
             <div className="max-h-[400px] space-y-2 overflow-auto">
               {filteredExpenses.length === 0 && <p className="py-12 text-center text-slate-500">אין הוצאות עדיין</p>}
-              {filteredExpenses.map((expense) => (
+              {filteredExpenses.map((expense) => {
+                const isDeletingExpense = isPending(`expense:delete:${expense.id}`);
+                return (
                 <div key={expense.id} className="flex items-start justify-between rounded-xl border border-slate-100 p-3">
                   <div className="flex items-start gap-3">
                     <div className="h-9 w-9 rounded-full bg-primary text-white grid place-items-center text-sm font-medium">{expense.owner[0]}</div>
@@ -893,12 +963,12 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold" dir="ltr">{money(expense.amount)}</span>
-                    <button className="min-h-11 min-w-11 rounded-lg text-slate-500 hover:bg-slate-100" onClick={() => handleDeleteExpense(expense.id)}>
-                      <Trash2 className="h-4 w-4 mx-auto" />
+                    <button className="min-h-11 min-w-11 rounded-lg text-slate-500 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-70" onClick={() => handleDeleteExpense(expense.id)} disabled={isDeletingExpense}>
+                      {isDeletingExpense ? <LoaderCircle className="mx-auto h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mx-auto" />}
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </Card>
         </div>
@@ -924,7 +994,9 @@ export default function App() {
             <div className="mb-3 rounded-xl bg-red/10 p-3 text-sm text-red">סה"כ ביטולים: <span dir="ltr" className="font-bold">{money(totalCancelled)}</span></div>
             <div className="max-h-[400px] space-y-2 overflow-auto">
               {filteredCancellations.length === 0 && <p className="py-12 text-center text-slate-500">אין ביטולים עדיין</p>}
-              {filteredCancellations.map((cancellation) => (
+              {filteredCancellations.map((cancellation) => {
+                const isDeletingCancellation = isPending(`cancellation:delete:${cancellation.id}`);
+                return (
                 <div key={cancellation.id} className="flex items-start justify-between rounded-xl border border-slate-100 p-3">
                   <div>
                     <p className="font-semibold">{cancellation.clientName || "ביטול תור"} · {cancellation.owner}</p>
@@ -933,12 +1005,12 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-red" dir="ltr">{money(cancellation.amount)}</span>
-                    <button className="min-h-11 min-w-11 rounded-lg text-slate-500 hover:bg-slate-100" onClick={() => handleDeleteCancellation(cancellation.id)}>
-                      <Trash2 className="h-4 w-4 mx-auto" />
+                    <button className="min-h-11 min-w-11 rounded-lg text-slate-500 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-70" onClick={() => handleDeleteCancellation(cancellation.id)} disabled={isDeletingCancellation}>
+                      {isDeletingCancellation ? <LoaderCircle className="mx-auto h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 mx-auto" />}
                     </button>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </Card>
         </div>
@@ -1270,5 +1342,98 @@ function Card({ title, children }) {
       <h2 className="mb-3 flex items-center gap-2 font-semibold"><BarChart3 className="h-4 w-4 text-slate-500" /> {title}</h2>
       {children}
     </section>
+  );
+}
+
+function LoadingTopBar({ visible }) {
+  const [isRendered, setIsRendered] = useState(visible);
+  const [progress, setProgress] = useState(visible ? 8 : 0);
+
+  useEffect(() => {
+    let timer;
+    let hideTimer;
+
+    if (visible) {
+      setIsRendered(true);
+      setProgress((prev) => (prev >= 100 || prev === 0 ? 8 : prev));
+      timer = window.setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 94) return 94;
+          if (prev >= 82) return Math.min(94, prev + 1);
+          if (prev >= 58) return Math.min(94, prev + 3);
+          return Math.min(94, prev + 5);
+        });
+      }, 120);
+    } else if (isRendered) {
+      setProgress(100);
+      hideTimer = window.setTimeout(() => {
+        setIsRendered(false);
+        setProgress(0);
+      }, 420);
+    }
+
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [visible, isRendered]);
+
+  if (!isRendered) return null;
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[80] h-1 overflow-hidden">
+      <div className="h-full w-full bg-slate-200/70">
+        <div
+          className="h-full bg-gradient-to-r from-sky-400 via-cyan-400 via-teal-400 to-emerald-400 transition-[width] duration-300 ease-out shadow-[0_0_18px_rgba(45,212,191,0.55)]"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function LoadingButtonContent({ loading, label }) {
+  if (!loading) return label;
+
+  return (
+    <span className="inline-flex items-center justify-center gap-2">
+      <LoaderCircle className="h-4 w-4 animate-spin" />
+      מעדכן...
+    </span>
+  );
+}
+
+function AnimatedProgressBar({ label, compact = false, progress: controlledProgress }) {
+  const [progress, setProgress] = useState(0);
+  const resolvedProgress = controlledProgress ?? progress;
+
+  useEffect(() => {
+    if (controlledProgress !== undefined) return undefined;
+
+    const timer = window.setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 100) return 0;
+        if (prev >= 90) return Math.min(100, prev + 2);
+        if (prev >= 70) return Math.min(100, prev + 4);
+        return Math.min(100, prev + 6);
+      });
+    }, 90);
+
+    return () => window.clearInterval(timer);
+  }, [controlledProgress]);
+
+  return (
+    <div className="w-full">
+      <div className={`mb-1 flex items-center justify-between ${compact ? "text-[11px]" : "text-xs"} font-semibold text-slate-600`}>
+        <span>{label}</span>
+        <span dir="ltr">{resolvedProgress}%</span>
+      </div>
+      <div className={`${compact ? "h-2.5" : "h-3"} overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200`}>
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-sky-400 via-cyan-400 via-teal-400 to-emerald-400 transition-[width] duration-300 ease-out shadow-[0_0_18px_rgba(45,212,191,0.45)]"
+          style={{ width: `${resolvedProgress}%` }}
+        />
+      </div>
+    </div>
   );
 }
